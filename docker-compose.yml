@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  stock-info:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stock-info-app
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Zum Starten:
+#   docker-compose up -d --build
+#
+# Zum Stoppen:
+#   docker-compose down
+#
+# Logs anzeigen:
+#   docker-compose logs -f stock-info

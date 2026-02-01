@@ -1,0 +1,1358 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/analysis.dart';
+import '../models/stock.dart';
+import '../providers/analysis_provider.dart';
+import '../utils/constants.dart';
+import '../widgets/analysis_chart_widget.dart';
+
+class AnalysisScreen extends StatefulWidget {
+  const AnalysisScreen({super.key});
+
+  @override
+  State<AnalysisScreen> createState() => _AnalysisScreenState();
+}
+
+class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  final TextEditingController _symbolController = TextEditingController();
+  String _selectedAssetType = 'Stock';
+  String? _expandedSymbol; // Welches Symbol ist gerade ausgeklappt
+  final Map<String, List<StockCandle>> _symbolChartData = {}; // Cache für Chart-Daten
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AnalysisProvider>().initialize();
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _symbolController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Check for pending symbol from other screens
+    final provider = context.watch<AnalysisProvider>();
+    if (provider.pendingSymbol != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _symbolController.text = provider.pendingSymbol!;
+        if (provider.pendingAssetType != null) {
+          setState(() {
+            _selectedAssetType = provider.pendingAssetType!;
+          });
+        }
+        provider.clearPendingSymbol();
+      });
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        title: const Row(
+          children: [
+            Icon(Icons.psychology, color: AppColors.primary),
+            SizedBox(width: 8),
+            Text('KI-Analyse', style: TextStyle(color: AppColors.textPrimary)),
+          ],
+        ),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: AppColors.primary,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: AppColors.textSecondary,
+          tabs: const [
+            Tab(text: 'Analyse'),
+            Tab(text: 'Gespeichert'),
+            Tab(text: 'Alerts'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildAnalyzeTab(),
+          _buildSavedTab(),
+          _buildAlertsTab(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnalyzeTab() {
+    return Consumer<AnalysisProvider>(
+      builder: (context, provider, _) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSearchCard(provider),
+              if (provider.isAnalyzing) ...[
+                const SizedBox(height: 24),
+                _buildLoadingCard(),
+              ],
+              if (provider.error != null) ...[
+                const SizedBox(height: 24),
+                _buildErrorCard(provider),
+              ],
+              if (provider.currentAnalysis != null) ...[
+                const SizedBox(height: 24),
+                // Chart mit historischen Vorhersagen
+                if (provider.currentChartData.isNotEmpty)
+                  Card(
+                    color: AppColors.card,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: AnalysisChartWidget(
+                        candles: provider.currentChartData,
+                        currentAnalysis: provider.currentAnalysis,
+                        historicalAnalyses: provider.getHistoricalAnalysesForSymbol(
+                          provider.currentAnalysis!.symbol,
+                        ).where((a) => a.analyzedAt != provider.currentAnalysis!.analyzedAt).toList(),
+                        selectedRange: provider.currentChartRange,
+                        onRangeChanged: (range) {
+                          provider.loadChartData(provider.currentAnalysis!.symbol, range);
+                        },
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                _buildAnalysisResult(provider.currentAnalysis!),
+              ],
+              const SizedBox(height: 24),
+              _buildStatisticsCard(provider),
+              // Analyse-Historie gruppiert nach Symbol
+              const SizedBox(height: 24),
+              _buildAnalysisHistorySection(provider),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchCard(AnalysisProvider provider) {
+    return Card(
+      color: AppColors.card,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Asset analysieren',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'GPT-4 analysiert Preisbewegungen, News und historische Muster',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    controller: _symbolController,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'Symbol (z.B. AAPL, BTC-USD)',
+                      hintStyle: const TextStyle(color: AppColors.textHint),
+                      prefixIcon: const Icon(Icons.search, color: AppColors.textHint),
+                      filled: true,
+                      fillColor: AppColors.cardLight,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    textCapitalization: TextCapitalization.characters,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardLight,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedAssetType,
+                        dropdownColor: AppColors.card,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        items: ['Stock', 'ETF', 'Crypto'].map((type) {
+                          return DropdownMenuItem(value: type, child: Text(type));
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() => _selectedAssetType = value!);
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: provider.isAnalyzing
+                    ? null
+                    : () {
+                        if (_symbolController.text.isNotEmpty) {
+                          provider.analyzeAsset(
+                            symbol: _symbolController.text.toUpperCase(),
+                            assetType: _selectedAssetType,
+                          );
+                        }
+                      },
+                icon: const Icon(Icons.auto_awesome),
+                label: Text(provider.isAnalyzing ? 'Analysiere...' : 'KI-Analyse starten'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingCard() {
+    return Card(
+      color: AppColors.card,
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          children: [
+            const CircularProgressIndicator(color: AppColors.primary),
+            const SizedBox(height: 20),
+            const Text(
+              'KI analysiert...',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Sammle Preisdaten, News und erkenne Muster...',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorCard(AnalysisProvider provider) {
+    return Card(
+      color: AppColors.loss.withValues(alpha: 0.2),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, color: AppColors.loss),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                provider.error!,
+                style: const TextStyle(color: AppColors.loss),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: AppColors.loss),
+              onPressed: () => provider.clearError(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnalysisResult(MarketAnalysis analysis) {
+    final directionColor = analysis.direction == AnalysisDirection.bullish
+        ? AppColors.profit
+        : analysis.direction == AnalysisDirection.bearish
+            ? AppColors.loss
+            : AppColors.neutral;
+
+    return Card(
+      color: AppColors.card,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: directionColor.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    analysis.directionEmoji,
+                    style: TextStyle(fontSize: 24, color: directionColor),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        analysis.symbol,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: directionColor,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              analysis.directionText,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${analysis.confidence.toStringAsFixed(0)}% Konfidenz',
+                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Summary
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.cardLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                analysis.summary,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Key Metrics
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMetricCard(
+                    'Erwartete Bewegung',
+                    '${analysis.expectedMovePercent >= 0 ? '+' : ''}${analysis.expectedMovePercent.toStringAsFixed(1)}%',
+                    directionColor,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildMetricCard(
+                    'Wahrscheinlichkeit',
+                    '${analysis.probabilitySignificantMove.toStringAsFixed(0)}%',
+                    AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildMetricCard(
+                    'Zeitraum',
+                    '${analysis.timeframeDays} Tage',
+                    AppColors.secondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Key Triggers
+            if (analysis.keyTriggers.isNotEmpty) ...[
+              const Text(
+                'Erkannte Trigger',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: analysis.keyTriggers.map((trigger) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
+                    ),
+                    child: Text(
+                      trigger,
+                      style: const TextStyle(color: AppColors.primary, fontSize: 12),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // Risk Factors
+            if (analysis.riskFactors.isNotEmpty) ...[
+              const Text(
+                'Risikofaktoren',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...analysis.riskFactors.map((risk) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.warning_amber, color: Colors.orange, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        risk,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+              const SizedBox(height: 20),
+            ],
+
+            // Recommendation
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    directionColor.withValues(alpha: 0.2),
+                    directionColor.withValues(alpha: 0.1),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: directionColor.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.lightbulb, color: directionColor),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      analysis.recommendation,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Alert Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  final provider = context.read<AnalysisProvider>();
+                  if (analysis.alertEnabled) {
+                    provider.disableAlert(analysis.symbol);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Alert deaktiviert')),
+                    );
+                  } else {
+                    provider.enableAlert(analysis);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Alert aktiviert! Du wirst benachrichtigt wenn Trigger erkannt werden.')),
+                    );
+                  }
+                },
+                icon: Icon(analysis.alertEnabled ? Icons.notifications_off : Icons.notifications_active),
+                label: Text(analysis.alertEnabled ? 'Alert deaktivieren' : 'Alert aktivieren'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: analysis.alertEnabled ? AppColors.cardLight : Colors.orange,
+                  foregroundColor: analysis.alertEnabled ? AppColors.textSecondary : Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetricCard(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(color: AppColors.textHint, fontSize: 10),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatisticsCard(AnalysisProvider provider) {
+    final stats = provider.statistics;
+    if (stats.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      color: AppColors.card,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Statistiken',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatItem('Analysen', '${stats['totalAnalyses'] ?? 0}', Icons.analytics),
+                _buildStatItem('Aktive Alerts', '${stats['activeAlerts'] ?? 0}', Icons.notifications),
+                _buildStatItem('Bullish', '${stats['bullishCount'] ?? 0}', Icons.trending_up, AppColors.profit),
+                _buildStatItem('Bearish', '${stats['bearishCount'] ?? 0}', Icons.trending_down, AppColors.loss),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value, IconData icon, [Color? color]) {
+    return Column(
+      children: [
+        Icon(icon, color: color ?? AppColors.primary, size: 24),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            color: color ?? AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(color: AppColors.textHint, fontSize: 10),
+        ),
+      ],
+    );
+  }
+
+  /// Gruppiert Analysen nach Symbol und zeigt sie als einklappbare Karten an
+  Widget _buildAnalysisHistorySection(AnalysisProvider provider) {
+    // Gruppiere Analysen nach Symbol
+    final Map<String, List<MarketAnalysis>> groupedAnalyses = {};
+    for (final analysis in provider.savedAnalyses) {
+      final symbol = analysis.symbol.toUpperCase();
+      groupedAnalyses.putIfAbsent(symbol, () => []);
+      groupedAnalyses[symbol]!.add(analysis);
+    }
+
+    // Sortiere jede Gruppe nach Datum (neueste zuerst)
+    for (final symbol in groupedAnalyses.keys) {
+      groupedAnalyses[symbol]!.sort((a, b) => b.analyzedAt.compareTo(a.analyzedAt));
+    }
+
+    // Sortiere Symbole nach Anzahl der Analysen (meiste zuerst)
+    final sortedSymbols = groupedAnalyses.keys.toList()
+      ..sort((a, b) => groupedAnalyses[b]!.length.compareTo(groupedAnalyses[a]!.length));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: Row(
+            children: [
+              Icon(Icons.history, color: AppColors.primary, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Analyse-Historie',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (sortedSymbols.isEmpty)
+          Card(
+            color: AppColors.card,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Icon(Icons.analytics_outlined, size: 48, color: AppColors.textHint),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Noch keine Analysen vorhanden',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Führe oben eine KI-Analyse durch um deine Historie zu starten',
+                    style: TextStyle(
+                      color: AppColors.textHint,
+                      fontSize: 12,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ...sortedSymbols.map((symbol) {
+            final analyses = groupedAnalyses[symbol]!;
+            return _buildSymbolHistoryCard(symbol, analyses, provider);
+          }),
+      ],
+    );
+  }
+
+  Widget _buildSymbolHistoryCard(
+    String symbol,
+    List<MarketAnalysis> analyses,
+    AnalysisProvider provider,
+  ) {
+    final isExpanded = _expandedSymbol == symbol;
+    final latestAnalysis = analyses.first;
+    final directionColor = latestAnalysis.direction == AnalysisDirection.bullish
+        ? AppColors.profit
+        : latestAnalysis.direction == AnalysisDirection.bearish
+            ? AppColors.loss
+            : AppColors.neutral;
+
+    return Card(
+      color: AppColors.card,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        children: [
+          // Header (immer sichtbar)
+          InkWell(
+            onTap: () async {
+              if (isExpanded) {
+                setState(() => _expandedSymbol = null);
+              } else {
+                // Lade Chart-Daten für dieses Symbol
+                await provider.loadChartData(symbol, '3M');
+                if (mounted) {
+                  setState(() => _expandedSymbol = symbol);
+                }
+              }
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  // Symbol Icon
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: directionColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: Text(
+                        latestAnalysis.directionEmoji,
+                        style: TextStyle(fontSize: 24, color: directionColor),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Symbol Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              symbol,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '${analyses.length} ${analyses.length == 1 ? 'Analyse' : 'Analysen'}',
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Letzte: ${_formatDate(latestAnalysis.analyzedAt)} | ${latestAnalysis.expectedMovePercent >= 0 ? "+" : ""}${latestAnalysis.expectedMovePercent.toStringAsFixed(1)}%',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Refresh Button für neue Analyse mit Label
+                  TextButton.icon(
+                    onPressed: provider.isAnalyzing
+                        ? null
+                        : () {
+                            provider.analyzeAsset(
+                              symbol: symbol,
+                              assetType: latestAnalysis.assetType,
+                            );
+                          },
+                    icon: provider.isAnalyzing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.primary,
+                            ),
+                          )
+                        : const Icon(Icons.psychology, color: AppColors.primary, size: 18),
+                    label: Text(
+                      provider.isAnalyzing ? 'Läuft...' : 'Neu',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Expand Icon
+                  Icon(
+                    isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    color: AppColors.textSecondary,
+                    size: 28,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Expandable Content
+          if (isExpanded) ...[
+            const Divider(color: AppColors.cardLight, height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // Chart
+                  if (provider.currentChartData.isNotEmpty)
+                    SizedBox(
+                      height: 350,
+                      child: AnalysisChartWidget(
+                        candles: provider.currentChartData,
+                        currentAnalysis: null,
+                        historicalAnalyses: analyses,
+                        selectedRange: provider.currentChartRange,
+                        onRangeChanged: (range) {
+                          provider.loadChartData(symbol, range);
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  // Tabelle der Analysen
+                  _buildAnalysisTable(analyses, provider),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnalysisTable(List<MarketAnalysis> analyses, AnalysisProvider provider) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardLight,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+            ),
+            child: const Row(
+              children: [
+                Expanded(flex: 2, child: Text('Datum', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                Expanded(flex: 2, child: Text('Richtung', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                Expanded(flex: 2, child: Text('Bewegung', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                Expanded(flex: 1, child: Text('Tage', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                Expanded(flex: 2, child: Text('Wahrsch.', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                Expanded(flex: 2, child: Text('Status', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                SizedBox(width: 40, child: Text('KI', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
+              ],
+            ),
+          ),
+          // Rows
+          ...analyses.asMap().entries.map((entry) {
+            final index = entry.key;
+            final analysis = entry.value;
+            return _buildAnalysisTableRow(analysis, index.isEven, provider);
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnalysisTableRow(MarketAnalysis analysis, bool isEven, AnalysisProvider provider) {
+    final directionColor = analysis.direction == AnalysisDirection.bullish
+        ? AppColors.profit
+        : analysis.direction == AnalysisDirection.bearish
+            ? AppColors.loss
+            : AppColors.neutral;
+
+    // Prüfe ob Zeitraum abgelaufen und ob korrekt
+    final endDate = analysis.analyzedAt.add(Duration(days: analysis.timeframeDays));
+    final isExpired = DateTime.now().isAfter(endDate);
+    String statusText = 'Läuft';
+    Color statusColor = Colors.orange;
+
+    if (isExpired) {
+      // Für eine echte Auswertung bräuchten wir die historischen Preise
+      // Hier zeigen wir erstmal nur "Abgelaufen"
+      statusText = 'Beendet';
+      statusColor = AppColors.textSecondary;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isEven ? AppColors.cardLight.withValues(alpha: 0.5) : Colors.transparent,
+      ),
+      child: Row(
+        children: [
+          // Datum
+          Expanded(
+            flex: 2,
+            child: Text(
+              '${analysis.analyzedAt.day}.${analysis.analyzedAt.month}.${analysis.analyzedAt.year.toString().substring(2)}',
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+            ),
+          ),
+          // Richtung
+          Expanded(
+            flex: 2,
+            child: Row(
+              children: [
+                Icon(
+                  analysis.direction == AnalysisDirection.bullish
+                      ? Icons.trending_up
+                      : analysis.direction == AnalysisDirection.bearish
+                          ? Icons.trending_down
+                          : Icons.trending_flat,
+                  color: directionColor,
+                  size: 16,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  analysis.direction == AnalysisDirection.bullish
+                      ? 'Bull'
+                      : analysis.direction == AnalysisDirection.bearish
+                          ? 'Bear'
+                          : 'Neutral',
+                  style: TextStyle(color: directionColor, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          // Erwartete Bewegung
+          Expanded(
+            flex: 2,
+            child: Text(
+              '${analysis.expectedMovePercent >= 0 ? "+" : ""}${analysis.expectedMovePercent.toStringAsFixed(1)}%',
+              style: TextStyle(
+                color: directionColor,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          // Zeitraum
+          Expanded(
+            flex: 1,
+            child: Text(
+              '${analysis.timeframeDays}',
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
+            ),
+          ),
+          // Wahrscheinlichkeit
+          Expanded(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: _getProbabilityColorForTable(analysis.probabilitySignificantMove).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                '${analysis.probabilitySignificantMove.toInt()}%',
+                style: TextStyle(
+                  color: _getProbabilityColorForTable(analysis.probabilitySignificantMove),
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+          // Status
+          Expanded(
+            flex: 2,
+            child: Text(
+              statusText,
+              style: TextStyle(
+                color: statusColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          // KI Analyse Button
+          SizedBox(
+            width: 40,
+            child: IconButton(
+              onPressed: provider.isAnalyzing
+                  ? null
+                  : () {
+                      provider.analyzeAsset(
+                        symbol: analysis.symbol,
+                        assetType: analysis.assetType,
+                      );
+                    },
+              icon: provider.isAnalyzing
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
+                    )
+                  : const Icon(Icons.psychology, size: 18),
+              color: AppColors.primary,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Neue KI-Analyse starten',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getProbabilityColorForTable(double probability) {
+    if (probability >= 70) {
+      return const Color(0xFF00E676);
+    } else if (probability >= 50) {
+      return Colors.orange;
+    } else {
+      return Colors.grey;
+    }
+  }
+
+  Widget _buildSavedTab() {
+    return Consumer<AnalysisProvider>(
+      builder: (context, provider, _) {
+        if (provider.savedAnalyses.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.folder_open, size: 64, color: AppColors.textHint),
+                SizedBox(height: 16),
+                Text(
+                  'Keine gespeicherten Analysen',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: provider.savedAnalyses.length,
+          itemBuilder: (context, index) {
+            final analysis = provider.savedAnalyses[index];
+            return _buildSavedAnalysisCard(analysis, provider);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSavedAnalysisCard(MarketAnalysis analysis, AnalysisProvider provider) {
+    final directionColor = analysis.direction == AnalysisDirection.bullish
+        ? AppColors.profit
+        : analysis.direction == AnalysisDirection.bearish
+            ? AppColors.loss
+            : AppColors.neutral;
+
+    return Card(
+      color: AppColors.card,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: () async {
+          // Load chart data for this symbol
+          await provider.loadChartData(analysis.symbol, '3M');
+          if (!mounted) return;
+
+          // Show full analysis with chart
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: AppColors.background,
+            builder: (_) => DraggableScrollableSheet(
+              initialChildSize: 0.9,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (_, controller) => Consumer<AnalysisProvider>(
+                builder: (context, prov, _) => SingleChildScrollView(
+                  controller: controller,
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // Chart with historical predictions
+                      if (prov.currentChartData.isNotEmpty)
+                        Card(
+                          color: AppColors.card,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: AnalysisChartWidget(
+                              candles: prov.currentChartData,
+                              currentAnalysis: analysis,
+                              historicalAnalyses: prov.getHistoricalAnalysesForSymbol(
+                                analysis.symbol,
+                              ).where((a) => a.analyzedAt != analysis.analyzedAt).toList(),
+                              selectedRange: prov.currentChartRange,
+                              onRangeChanged: (range) {
+                                prov.loadChartData(analysis.symbol, range);
+                              },
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      _buildAnalysisResult(analysis),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: directionColor.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  analysis.directionEmoji,
+                  style: TextStyle(fontSize: 20, color: directionColor),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          analysis.symbol,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: directionColor,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            analysis.directionText,
+                            style: const TextStyle(color: Colors.white, fontSize: 10),
+                          ),
+                        ),
+                        if (analysis.alertEnabled) ...[
+                          const SizedBox(width: 4),
+                          const Icon(Icons.notifications_active, color: Colors.orange, size: 16),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${analysis.confidence.toStringAsFixed(0)}% Konfidenz | ${analysis.expectedMovePercent >= 0 ? '+' : ''}${analysis.expectedMovePercent.toStringAsFixed(1)}% erwartet',
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: AppColors.textHint),
+                onPressed: () {
+                  provider.deleteAnalysis(analysis.symbol);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAlertsTab() {
+    return Consumer<AnalysisProvider>(
+      builder: (context, provider, _) {
+        if (provider.activeAlerts.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.notifications_off, size: 64, color: AppColors.textHint),
+                SizedBox(height: 16),
+                Text(
+                  'Keine aktiven Alerts',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Analysiere ein Asset und aktiviere Alerts',
+                  style: TextStyle(color: AppColors.textHint, fontSize: 12),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: provider.activeAlerts.length,
+          itemBuilder: (context, index) {
+            final alert = provider.activeAlerts[index];
+            return _buildAlertCard(alert, provider);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAlertCard(TriggerAlert alert, AnalysisProvider provider) {
+    final directionColor = alert.expectedDirection == AnalysisDirection.bullish
+        ? AppColors.profit
+        : alert.expectedDirection == AnalysisDirection.bearish
+            ? AppColors.loss
+            : AppColors.neutral;
+
+    return Card(
+      color: AppColors.card,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.notifications_active, color: Colors.orange),
+                const SizedBox(width: 8),
+                Text(
+                  alert.symbol,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: directionColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    alert.expectedDirection == AnalysisDirection.bullish ? 'BULLISH' : 'BEARISH',
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Erwartete Bewegung: ${alert.expectedMovePercent >= 0 ? '+' : ''}${alert.expectedMovePercent.toStringAsFixed(1)}%',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Trigger:',
+              style: TextStyle(color: AppColors.textHint, fontSize: 11),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: alert.triggers.take(3).map((t) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.cardLight,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  t,
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                ),
+              )).toList(),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Erstellt: ${_formatDate(alert.createdAt)}',
+                  style: const TextStyle(color: AppColors.textHint, fontSize: 11),
+                ),
+                TextButton(
+                  onPressed: () => provider.disableAlert(alert.symbol),
+                  child: const Text('Deaktivieren', style: TextStyle(color: AppColors.loss)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}.${date.month}.${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
+}

@@ -1,0 +1,36 @@
+# Build outputs
+build/
+.dart_tool/
+.packages
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Git
+.git/
+.gitignore
+
+# Docker files (no need to copy to builder)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+*.md
+README*
+LICENSE
+
+# Test files
+test/
+integration_test/
+*_test.dart
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
+*.tmp
