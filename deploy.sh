@@ -102,8 +102,8 @@ ssh $USER@$SERVER << 'EOF'
     fi
 
     # Restart Docker containers
-    docker-compose down 2>/dev/null || true
-    docker-compose up -d --build
+    docker compose down 2>/dev/null || true
+    docker compose up -d --build
 
     echo "Services restarted"
 EOF
