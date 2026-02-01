@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'providers/stock_provider.dart';
 import 'providers/analysis_provider.dart';
-import 'screens/dashboard_screen.dart';
+import 'providers/auth_provider.dart';
+import 'widgets/auth_wrapper.dart';
+import 'config/supabase_config.dart';
 import 'utils/constants.dart';
 
 Future<void> main() async {
@@ -15,8 +18,13 @@ Future<void> main() async {
     await dotenv.load(fileName: '.env');
   } catch (e) {
     // .env file might not exist in web builds
-    // print('Warning: Could not load .env file');
   }
+
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: SupabaseConfig.url,
+    anonKey: SupabaseConfig.anonKey,
+  );
 
   runApp(const StockTraderApp());
 }
@@ -28,6 +36,7 @@ class StockTraderApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => StockProvider()),
         ChangeNotifierProvider(create: (_) => AnalysisProvider()),
       ],
@@ -124,7 +133,7 @@ class StockTraderApp extends StatelessWidget {
             behavior: SnackBarBehavior.floating,
           ),
         ),
-        home: const DashboardScreen(),
+        home: const AuthWrapper(),
       ),
     );
   }

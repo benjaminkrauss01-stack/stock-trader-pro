@@ -94,6 +94,9 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Limit Warning Banner
+              if (provider.remainingAnalyses < 2 && provider.subscriptionTier != 'ultimate')
+                _buildLimitWarningBanner(provider),
               _buildSearchCard(provider),
               if (provider.isAnalyzing) ...[
                 const SizedBox(height: 24),
@@ -1354,5 +1357,47 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
 
   String _formatDate(DateTime date) {
     return '${date.day}.${date.month}.${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildLimitWarningBanner(AnalysisProvider provider) {
+    final remaining = provider.remainingAnalyses;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade700.withValues(alpha: 0.15),
+        border: Border.all(color: Colors.orange.shade700, width: 1.5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Nur noch $remaining Analysen verfügbar!',
+                  style: TextStyle(
+                    color: Colors.orange.shade700,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Upgraden Sie auf Pro oder Ultimate für mehr Analysen',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

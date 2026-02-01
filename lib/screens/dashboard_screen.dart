@@ -152,6 +152,14 @@ class _HomeTab extends StatelessWidget {
                 ),
               ],
             ),
+            // Analysis Limit Banner
+            SliverToBoxAdapter(
+              child: Consumer<AnalysisProvider>(
+                builder: (context, analysisProvider, _) {
+                  return _buildAnalysisLimitBanner(context, analysisProvider);
+                },
+              ),
+            ),
             // Quick Actions
             SliverToBoxAdapter(
               child: _buildQuickActions(context),
@@ -244,6 +252,89 @@ class _HomeTab extends StatelessWidget {
   void _navigateToTab(BuildContext context, int index) {
     final state = context.findAncestorStateOfType<DashboardScreenState>();
     state?.setTabIndex(index);
+  }
+
+  Widget _buildAnalysisLimitBanner(BuildContext context, AnalysisProvider analysisProvider) {
+    final remaining = analysisProvider.remainingAnalyses;
+    final tier = analysisProvider.subscriptionTier;
+    final maxAnalyses = tier == 'free' ? 5 : (tier == 'pro' ? 100 : -1);
+    
+    if (maxAnalyses == -1) {
+      // Ultimate plan - keine Limits
+      return const SizedBox.shrink();
+    }
+
+    final used = maxAnalyses - remaining;
+    final percent = used / maxAnalyses;
+    
+    // Farbe basierend auf Auslastung
+    Color bannerColor;
+    if (percent >= 0.9) {
+      bannerColor = Colors.red.shade700;
+    } else if (percent >= 0.7) {
+      bannerColor = Colors.orange.shade600;
+    } else {
+      bannerColor = Colors.blue.shade600;
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bannerColor.withValues(alpha: 0.15),
+        border: Border.all(
+          color: bannerColor,
+          width: 1.5,
+        ),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.psychology, color: bannerColor, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'KI-Analyse Limit',
+                style: TextStyle(
+                  color: bannerColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${remaining.toString()} verbleibend',
+                style: TextStyle(
+                  color: bannerColor,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: percent,
+              minHeight: 6,
+              backgroundColor: bannerColor.withValues(alpha: 0.2),
+              valueColor: AlwaysStoppedAnimation<Color>(bannerColor),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '$used / $maxAnalyses Analysen verwendet',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -7,6 +7,7 @@ import '../services/pattern_detection_service.dart';
 import '../services/stock_api_service.dart';
 import '../services/news_service_extended.dart';
 import '../services/historical_news_service.dart';
+import '../services/supabase_service.dart';
 
 class AnalysisProvider extends ChangeNotifier {
   final AIAnalysisService _aiService = AIAnalysisService();
@@ -15,6 +16,7 @@ class AnalysisProvider extends ChangeNotifier {
   final StockApiService _stockService = StockApiService();
   final ExtendedNewsService _newsService = ExtendedNewsService();
   final HistoricalNewsService _historicalNewsService = HistoricalNewsService();
+  final SupabaseService _supabaseService = SupabaseService();
 
   List<MarketAnalysis> _savedAnalyses = [];
   List<TriggerAlert> _activeAlerts = [];
@@ -24,6 +26,11 @@ class AnalysisProvider extends ChangeNotifier {
   bool _isAnalyzing = false;
   String? _error;
   Map<String, dynamic> _statistics = {};
+
+  // Analysis limit tracking
+  int _remainingAnalyses = 5;
+  String _subscriptionTier = 'free';
+  bool _limitReached = false;
 
   // Symbol und Asset-Type für Quick-Analyse von anderen Screens
   String? _pendingSymbol;
@@ -39,6 +46,9 @@ class AnalysisProvider extends ChangeNotifier {
   Map<String, dynamic> get statistics => _statistics;
   String? get pendingSymbol => _pendingSymbol;
   String? get pendingAssetType => _pendingAssetType;
+  int get remainingAnalyses => _remainingAnalyses;
+  String get subscriptionTier => _subscriptionTier;
+  bool get limitReached => _limitReached;
 
   /// Setzt ein Symbol für die Analyse (wird von anderen Screens aufgerufen)
   void setSymbolForAnalysis(String symbol, String assetType) {
@@ -64,6 +74,22 @@ class AnalysisProvider extends ChangeNotifier {
   Future<void> initialize() async {
     await _alertService.init();
     await loadSavedData();
+    await updateLimitsFromSupabase();
+  }
+
+  /// Lädt aktuelle Limits von Supabase
+  Future<void> updateLimitsFromSupabase() async {
+    try {
+      final profile = await _supabaseService.getProfile();
+      if (profile != null) {
+        _remainingAnalyses = profile.remainingAnalyses;
+        _subscriptionTier = profile.subscriptionTier;
+        _limitReached = !profile.canPerformAnalysis;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error loading limits from Supabase: $e');
+    }
   }
 
   Future<void> loadSavedData() async {
@@ -110,6 +136,16 @@ class AnalysisProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Check analysis limit before proceeding
+      final limitCheck = await _supabaseService.checkAnalysisLimit();
+      final allowed = limitCheck['allowed'] as bool? ?? false;
+      if (!allowed) {
+        _error = 'Analysenlimit für diesen Monat erreicht. Upgrade auf Pro oder Ultimate Plan.';
+        _isAnalyzing = false;
+        notifyListeners();
+        return null;
+      }
+
       // 1. Fetch historical price data (90 days)
       final candles = await _stockService.getChartData(symbol, '3mo', '1d');
 
@@ -185,6 +221,9 @@ class AnalysisProvider extends ChangeNotifier {
 
       // 7. Save analysis
       await _alertService.saveAnalysis(analysis);
+
+      // Increment analysis count in Supabase
+      await _supabaseService.incrementAnalysisCount();
 
       _currentAnalysis = analysis;
       _savedAnalyses = await _alertService.getSavedAnalyses();
