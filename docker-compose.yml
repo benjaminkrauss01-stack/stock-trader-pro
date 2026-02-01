@@ -1,14 +1,13 @@
-version: '3.8'
-
 services:
-  stock-info:
+  # Flutter Web App (nginx)
+  web:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: stock-info-app
-    ports:
-      - "8080:80"
+    container_name: stock-info-web
     restart: unless-stopped
+    depends_on:
+      - proxy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80"]
       interval: 30s
@@ -16,11 +15,45 @@ services:
       retries: 3
       start_period: 40s
 
+  # Python Proxy Server for API calls
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    container_name: stock-info-proxy
+    restart: unless-stopped
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/yahoo/quote?symbols=AAPL')"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Nginx reverse proxy (main entry point)
+  nginx:
+    image: nginx:alpine
+    container_name: stock-info-app
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
+      - proxy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 # Zum Starten:
-#   docker-compose up -d --build
+#   docker compose up -d --build
 #
 # Zum Stoppen:
-#   docker-compose down
+#   docker compose down
 #
 # Logs anzeigen:
-#   docker-compose logs -f stock-info
+#   docker compose logs -f

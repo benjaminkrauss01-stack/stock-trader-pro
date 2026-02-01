@@ -1,0 +1,20 @@
+# Python Proxy Server for Stock Trader Pro
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN pip install --no-cache-dir \
+    yfinance \
+    requests \
+    python-dotenv
+
+# Copy proxy server and .env
+COPY proxy_server.py .
+COPY .env* ./
+
+# Expose port
+EXPOSE 5000
+
+# Run proxy server on port 5000
+CMD ["python", "proxy_server.py", "5000"]
