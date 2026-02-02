@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/analysis_provider.dart';
 import '../utils/constants.dart';
+import 'admin_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -127,13 +128,19 @@ class ProfileScreen extends StatelessWidget {
     final tier = authProvider.subscriptionTier;
     final isUltimate = tier == 'ultimate';
     final isPro = tier == 'pro';
+    final isAdmin = tier == 'admin';
 
     Color tierColor;
     IconData tierIcon;
     String tierName;
     String tierDescription;
 
-    if (isUltimate) {
+    if (isAdmin) {
+      tierColor = Colors.purple;
+      tierIcon = Icons.admin_panel_settings;
+      tierName = 'Administrator';
+      tierDescription = 'Voller Zugriff + User-Management';
+    } else if (isUltimate) {
       tierColor = Colors.amber;
       tierIcon = Icons.diamond;
       tierName = 'Ultimate';
@@ -190,9 +197,9 @@ class ProfileScreen extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          if (isUltimate) ...[
+                          if (isUltimate || isAdmin) ...[
                             const SizedBox(width: 8),
-                            const Icon(Icons.verified, color: Colors.amber, size: 20),
+                            Icon(Icons.verified, color: isAdmin ? Colors.purple : Colors.amber, size: 20),
                           ],
                         ],
                       ),
@@ -209,7 +216,29 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ],
             ),
-            if (!isUltimate) ...[
+            if (isAdmin) ...[
+              const SizedBox(height: 20),
+              const Divider(color: AppColors.cardLight),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const AdminScreen()),
+                    );
+                  },
+                  icon: const Icon(Icons.admin_panel_settings),
+                  label: const Text('Admin Panel'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ] else if (!isUltimate) ...[
               const SizedBox(height: 20),
               const Divider(color: AppColors.cardLight),
               const SizedBox(height: 12),
@@ -238,12 +267,12 @@ class ProfileScreen extends StatelessWidget {
   Widget _buildAnalysisUsageCard(AnalysisProvider analysisProvider) {
     final remaining = analysisProvider.remainingAnalyses;
     final tier = analysisProvider.subscriptionTier;
-    final isUnlimited = tier == 'ultimate';
+    final isUnlimited = tier == 'ultimate' || tier == 'admin';
 
     int limit;
     if (tier == 'pro') {
       limit = 100;
-    } else if (tier == 'ultimate') {
+    } else if (tier == 'ultimate' || tier == 'admin') {
       limit = -1;
     } else {
       limit = 5;

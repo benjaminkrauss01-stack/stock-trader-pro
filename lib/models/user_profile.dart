@@ -50,21 +50,24 @@ class UserProfile {
       case 'pro':
         return 100;
       case 'ultimate':
-        return -1;
+      case 'admin':
+        return -1; // Unlimited
       default:
         return 5;
     }
   }
 
   int get remainingAnalyses {
-    if (subscriptionTier == 'ultimate') return -1;
+    if (subscriptionTier == 'ultimate' || subscriptionTier == 'admin') return -1;
     return analysisLimit - aiAnalysesUsed;
   }
 
   bool get canPerformAnalysis {
-    if (subscriptionTier == 'ultimate') return true;
+    if (subscriptionTier == 'ultimate' || subscriptionTier == 'admin') return true;
     return aiAnalysesUsed < analysisLimit;
   }
+
+  bool get isAdmin => subscriptionTier == 'admin';
 
   String get tierDisplayName {
     switch (subscriptionTier) {
@@ -72,6 +75,8 @@ class UserProfile {
         return 'Pro';
       case 'ultimate':
         return 'Ultimate';
+      case 'admin':
+        return 'Administrator';
       default:
         return 'Free';
     }

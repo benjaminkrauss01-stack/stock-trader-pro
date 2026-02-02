@@ -208,4 +208,69 @@ class SupabaseService {
         .eq('id', analysisId)
         .eq('user_id', userId!);
   }
+
+  // ========== ADMIN OPERATIONS ==========
+
+  /// Get list of all users (admin only)
+  Future<Map<String, dynamic>> adminListUsers() async {
+    if (userId == null) {
+      return {'success': false, 'error': 'Nicht eingeloggt'};
+    }
+
+    final response = await _client.rpc('admin_list_users', params: {
+      'p_admin_id': userId,
+    });
+
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  /// Get system statistics (admin only)
+  Future<Map<String, dynamic>> adminGetStatistics() async {
+    if (userId == null) {
+      return {'success': false, 'error': 'Nicht eingeloggt'};
+    }
+
+    final response = await _client.rpc('admin_get_statistics', params: {
+      'p_admin_id': userId,
+    });
+
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  /// Set user subscription tier (admin only)
+  Future<Map<String, dynamic>> adminSetUserTier(String targetUserId, String newTier) async {
+    if (userId == null) {
+      return {'success': false, 'error': 'Nicht eingeloggt'};
+    }
+
+    final response = await _client.rpc('set_user_tier', params: {
+      'p_admin_id': userId,
+      'p_target_user_id': targetUserId,
+      'p_new_tier': newTier,
+    });
+
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  /// Reset user analysis count (admin only)
+  Future<Map<String, dynamic>> adminResetUserAnalyses(String targetUserId) async {
+    if (userId == null) {
+      return {'success': false, 'error': 'Nicht eingeloggt'};
+    }
+
+    final response = await _client.rpc('admin_reset_user_analyses', params: {
+      'p_admin_id': userId,
+      'p_target_user_id': targetUserId,
+    });
+
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  /// Get tier definitions for display
+  Future<List<Map<String, dynamic>>> getTierDefinitions() async {
+    final response = await _client.rpc('get_tier_definitions');
+
+    if (response == null) return [];
+    return List<Map<String, dynamic>>.from(response as List);
+  }
 }
