@@ -60,6 +60,10 @@ class ProfileScreen extends StatelessWidget {
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       await authProvider.signOut();
+                      if (context.mounted) {
+                        // Clear navigation stack and go to root (AuthWrapper will show LoginScreen)
+                        Navigator.of(context).popUntil((route) => route.isFirst);
+                      }
                     },
                     icon: const Icon(Icons.logout),
                     label: const Text('Abmelden'),
