@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/stock_provider.dart';
 import '../providers/analysis_provider.dart';
+import '../providers/auth_provider.dart';
 import '../utils/constants.dart';
 import '../widgets/stock_card.dart';
 import 'stock_detail_screen.dart';
@@ -11,6 +12,7 @@ import 'etf_screen.dart';
 import 'news_hub_screen.dart';
 import 'analysis_screen.dart';
 import 'search_screen.dart';
+import 'profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -149,6 +151,43 @@ class _HomeTab extends StatelessWidget {
                 IconButton(
                   icon: const Icon(Icons.refresh, color: AppColors.textPrimary),
                   onPressed: () => context.read<StockProvider>().refreshAll(),
+                ),
+                Consumer<AuthProvider>(
+                  builder: (context, authProvider, _) {
+                    final tier = authProvider.subscriptionTier;
+                    final tierColor = tier == 'ultimate'
+                        ? Colors.amber
+                        : tier == 'pro'
+                            ? AppColors.primary
+                            : AppColors.textSecondary;
+                    return IconButton(
+                      icon: Stack(
+                        children: [
+                          const Icon(Icons.account_circle, color: AppColors.textPrimary),
+                          if (tier == 'ultimate' || tier == 'pro')
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: tierColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: AppColors.background, width: 1.5),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                        );
+                      },
+                    );
+                  },
                 ),
               ],
             ),

@@ -2,19 +2,22 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/stock.dart';
 import '../services/stock_api_service.dart';
+import '../services/supabase_service.dart';
 import '../utils/constants.dart';
 
 class StockProvider with ChangeNotifier {
   final StockApiService _apiService = StockApiService();
+  final SupabaseService _supabaseService = SupabaseService();
 
   List<Stock> _watchlistStocks = [];
   List<Stock> _indexStocks = [];
   Stock? _selectedStock;
   List<StockCandle> _chartData = [];
-  final List<PortfolioPosition> _portfolio = [];
+  List<PortfolioPosition> _portfolio = [];
   List<Map<String, dynamic>> _searchResults = [];
 
   bool _isLoading = false;
+  bool _isSyncing = false;
   String? _error;
   String _selectedRange = '1M';
   Timer? _refreshTimer;
@@ -26,6 +29,7 @@ class StockProvider with ChangeNotifier {
   List<PortfolioPosition> get portfolio => _portfolio;
   List<Map<String, dynamic>> get searchResults => _searchResults;
   bool get isLoading => _isLoading;
+  bool get isSyncing => _isSyncing;
   String? get error => _error;
   String get selectedRange => _selectedRange;
 
@@ -38,7 +42,7 @@ class StockProvider with ChangeNotifier {
       ? (portfolioTotalProfit / portfolioTotalCost) * 100
       : 0;
 
-  final List<String> _watchlistSymbols = List.from(DefaultStocks.watchlist);
+  List<String> _watchlistSymbols = List.from(DefaultStocks.watchlist);
   List<String> get watchlistSymbols => _watchlistSymbols;
 
   Future<void> initialize() async {
@@ -47,6 +51,9 @@ class StockProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      // Load data from Supabase first
+      await syncFromSupabase();
+
       await Future.wait([
         loadWatchlist(),
         loadIndices(),
@@ -57,6 +64,32 @@ class StockProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       startAutoRefresh();
+    }
+  }
+
+  /// Synchronisiert Watchlist und Portfolio von Supabase
+  Future<void> syncFromSupabase() async {
+    _isSyncing = true;
+    notifyListeners();
+
+    try {
+      // Load watchlist from Supabase
+      final cloudWatchlist = await _supabaseService.getWatchlist();
+      if (cloudWatchlist.isNotEmpty) {
+        _watchlistSymbols = cloudWatchlist;
+      }
+
+      // Load portfolio from Supabase
+      final cloudPortfolio = await _supabaseService.getPortfolio();
+      if (cloudPortfolio.isNotEmpty) {
+        _portfolio = cloudPortfolio;
+        await updatePortfolioPrices();
+      }
+    } catch (e) {
+      debugPrint('Error syncing from Supabase: $e');
+    } finally {
+      _isSyncing = false;
+      notifyListeners();
     }
   }
 
@@ -164,31 +197,59 @@ class StockProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void addToWatchlist(String symbol) {
+  Future<void> addToWatchlist(String symbol, {String assetType = 'Stock'}) async {
     if (!_watchlistSymbols.contains(symbol)) {
       _watchlistSymbols.add(symbol);
       loadWatchlist();
+
+      // Sync to Supabase
+      try {
+        await _supabaseService.addToWatchlist(symbol, assetType: assetType);
+      } catch (e) {
+        debugPrint('Error adding to cloud watchlist: $e');
+      }
     }
   }
 
-  void removeFromWatchlist(String symbol) {
+  Future<void> removeFromWatchlist(String symbol) async {
     _watchlistSymbols.remove(symbol);
     _watchlistStocks.removeWhere((s) => s.symbol == symbol);
     notifyListeners();
+
+    // Sync to Supabase
+    try {
+      await _supabaseService.removeFromWatchlist(symbol);
+    } catch (e) {
+      debugPrint('Error removing from cloud watchlist: $e');
+    }
   }
 
   bool isInWatchlist(String symbol) {
     return _watchlistSymbols.contains(symbol);
   }
 
-  void addToPortfolio(PortfolioPosition position) {
+  Future<void> addToPortfolio(PortfolioPosition position) async {
     _portfolio.add(position);
     notifyListeners();
+
+    // Sync to Supabase
+    try {
+      await _supabaseService.addPortfolioPosition(position);
+    } catch (e) {
+      debugPrint('Error adding to cloud portfolio: $e');
+    }
   }
 
-  void removeFromPortfolio(String symbol) {
+  Future<void> removeFromPortfolio(String symbol) async {
     _portfolio.removeWhere((p) => p.symbol == symbol);
     notifyListeners();
+
+    // Sync to Supabase
+    try {
+      await _supabaseService.removePortfolioPosition(symbol);
+    } catch (e) {
+      debugPrint('Error removing from cloud portfolio: $e');
+    }
   }
 
   Future<void> updatePortfolioPrices() async {
