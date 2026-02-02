@@ -141,11 +141,14 @@ class AuthProvider extends ChangeNotifier {
   Future<void> signOut() async {
     try {
       await _supabase.auth.signOut();
-      _user = null;
-      _profile = null;
-      notifyListeners();
     } catch (e) {
       debugPrint('Error signing out: $e');
+    } finally {
+      // Always clear local state, even if network request fails
+      _user = null;
+      _profile = null;
+      _isLoading = false;
+      notifyListeners();
     }
   }
 

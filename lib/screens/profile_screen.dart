@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/analysis_provider.dart';
 import '../utils/constants.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -20,8 +21,8 @@ class ProfileScreen extends StatelessWidget {
           ],
         ),
       ),
-      body: Consumer<AuthProvider>(
-        builder: (context, authProvider, _) {
+      body: Consumer2<AuthProvider, AnalysisProvider>(
+        builder: (context, authProvider, analysisProvider, _) {
           if (authProvider.isLoading) {
             return const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
@@ -44,8 +45,8 @@ class ProfileScreen extends StatelessWidget {
                 _buildSubscriptionCard(context, authProvider),
                 const SizedBox(height: 16),
 
-                // Analysis Usage Card
-                _buildAnalysisUsageCard(authProvider),
+                // Analysis Usage Card - use AnalysisProvider for real-time updates
+                _buildAnalysisUsageCard(analysisProvider),
                 const SizedBox(height: 16),
 
                 // Settings Card
@@ -234,9 +235,9 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAnalysisUsageCard(AuthProvider authProvider) {
-    final remaining = authProvider.remainingAnalyses;
-    final tier = authProvider.subscriptionTier;
+  Widget _buildAnalysisUsageCard(AnalysisProvider analysisProvider) {
+    final remaining = analysisProvider.remainingAnalyses;
+    final tier = analysisProvider.subscriptionTier;
     final isUnlimited = tier == 'ultimate';
 
     int limit;

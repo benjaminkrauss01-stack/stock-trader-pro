@@ -222,8 +222,9 @@ class AnalysisProvider extends ChangeNotifier {
       // 7. Save analysis
       await _alertService.saveAnalysis(analysis);
 
-      // Increment analysis count in Supabase
+      // Increment analysis count in Supabase and refresh local state
       await _supabaseService.incrementAnalysisCount();
+      await updateLimitsFromSupabase();
 
       _currentAnalysis = analysis;
       _savedAnalyses = await _alertService.getSavedAnalyses();
