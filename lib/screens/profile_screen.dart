@@ -132,6 +132,7 @@ class ProfileScreen extends StatelessWidget {
     final tier = authProvider.subscriptionTier;
     final isUltimate = tier == 'ultimate';
     final isPro = tier == 'pro';
+    final isFriends = tier == 'friends';
     final isAdmin = tier == 'admin';
 
     Color tierColor;
@@ -144,6 +145,11 @@ class ProfileScreen extends StatelessWidget {
       tierIcon = Icons.admin_panel_settings;
       tierName = 'Administrator';
       tierDescription = 'Voller Zugriff + User-Management';
+    } else if (isFriends) {
+      tierColor = Colors.teal;
+      tierIcon = Icons.favorite;
+      tierName = 'Friends';
+      tierDescription = 'Unbegrenzte KI-Analysen';
     } else if (isUltimate) {
       tierColor = Colors.amber;
       tierIcon = Icons.diamond;
@@ -201,9 +207,9 @@ class ProfileScreen extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          if (isUltimate || isAdmin) ...[
+                          if (isUltimate || isFriends || isAdmin) ...[
                             const SizedBox(width: 8),
-                            Icon(Icons.verified, color: isAdmin ? Colors.purple : Colors.amber, size: 20),
+                            Icon(Icons.verified, color: isAdmin ? Colors.purple : (isFriends ? Colors.teal : Colors.amber), size: 20),
                           ],
                         ],
                       ),
@@ -242,7 +248,7 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
               ),
-            ] else if (!isUltimate) ...[
+            ] else if (!isUltimate && !isFriends) ...[
               const SizedBox(height: 20),
               const Divider(color: AppColors.cardLight),
               const SizedBox(height: 12),
@@ -271,12 +277,12 @@ class ProfileScreen extends StatelessWidget {
   Widget _buildAnalysisUsageCard(AnalysisProvider analysisProvider) {
     final remaining = analysisProvider.remainingAnalyses;
     final tier = analysisProvider.subscriptionTier;
-    final isUnlimited = tier == 'ultimate' || tier == 'admin';
+    final isUnlimited = tier == 'ultimate' || tier == 'friends' || tier == 'admin';
 
     int limit;
     if (tier == 'pro') {
       limit = 100;
-    } else if (tier == 'ultimate' || tier == 'admin') {
+    } else if (tier == 'ultimate' || tier == 'friends' || tier == 'admin') {
       limit = -1;
     } else {
       limit = 5;

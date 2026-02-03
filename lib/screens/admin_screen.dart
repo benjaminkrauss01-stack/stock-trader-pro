@@ -55,7 +55,7 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Future<void> _changeUserTier(String userId, String currentTier) async {
-    final tiers = ['free', 'pro', 'ultimate', 'admin'];
+    final tiers = ['free', 'pro', 'ultimate', 'friends', 'admin'];
 
     final result = await showDialog<String>(
       context: context,
@@ -150,6 +150,7 @@ class _AdminScreenState extends State<AdminScreen> {
     switch (tier) {
       case 'pro': return 'Pro';
       case 'ultimate': return 'Ultimate';
+      case 'friends': return 'Friends';
       case 'admin': return 'Administrator';
       default: return 'Free';
     }
@@ -159,6 +160,7 @@ class _AdminScreenState extends State<AdminScreen> {
     switch (tier) {
       case 'pro': return Icons.workspace_premium;
       case 'ultimate': return Icons.diamond;
+      case 'friends': return Icons.favorite;
       case 'admin': return Icons.admin_panel_settings;
       default: return Icons.account_circle;
     }
@@ -168,6 +170,7 @@ class _AdminScreenState extends State<AdminScreen> {
     switch (tier) {
       case 'pro': return AppColors.primary;
       case 'ultimate': return Colors.amber;
+      case 'friends': return Colors.teal;
       case 'admin': return Colors.purple;
       default: return AppColors.textSecondary;
     }
@@ -281,7 +284,7 @@ class _AdminScreenState extends State<AdminScreen> {
             Wrap(
               spacing: 12,
               runSpacing: 8,
-              children: ['free', 'pro', 'ultimate', 'admin'].map((tier) {
+              children: ['free', 'pro', 'ultimate', 'friends', 'admin'].map((tier) {
                 final count = usersByTier[tier] ?? 0;
                 return Chip(
                   avatar: Icon(_getTierIcon(tier), size: 18, color: _getTierColor(tier)),
