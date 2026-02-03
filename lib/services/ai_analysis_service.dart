@@ -20,6 +20,7 @@ class AIAnalysisService {
     required List<PricePoint> priceHistory,
     required List<NewsEvent> recentNews,
     required List<SignificantMove> significantMoves,
+    String? customPromptTemplate,
   }) async {
     final prompt = _buildAnalysisPrompt(
       symbol: symbol,
@@ -27,6 +28,7 @@ class AIAnalysisService {
       priceHistory: priceHistory,
       recentNews: recentNews,
       significantMoves: significantMoves,
+      customPromptTemplate: customPromptTemplate,
     );
 
     final systemMessage = OpenAIChatCompletionChoiceMessageModel(
@@ -55,6 +57,7 @@ class AIAnalysisService {
     required List<PricePoint> priceHistory,
     required List<NewsEvent> recentNews,
     required List<SignificantMove> significantMoves,
+    String? customPromptTemplate,
   }) {
     final priceData = priceHistory
         .map(
@@ -84,6 +87,16 @@ class AIAnalysisService {
 
       return '$moveInfo\n  Vorhergehende Nachrichten (7 Tage):\n$precedingNewsStr';
     }).join('\n\n');
+
+    // Use custom prompt template if provided, otherwise use default
+    if (customPromptTemplate != null && customPromptTemplate.isNotEmpty) {
+      return customPromptTemplate
+          .replaceAll('{symbol}', symbol)
+          .replaceAll('{assetType}', assetType)
+          .replaceAll('{priceData}', priceData)
+          .replaceAll('{newsData}', newsData)
+          .replaceAll('{movesWithPrecedingNews}', movesWithPrecedingNews);
+    }
 
     return '''
 Analysiere die folgenden Daten für $symbol ($assetType) und identifiziere Muster.

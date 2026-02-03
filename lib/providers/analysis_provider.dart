@@ -210,16 +210,20 @@ class AnalysisProvider extends ChangeNotifier {
       final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
       final recentNews = allNewsEvents.where((n) => n.date.isAfter(sevenDaysAgo)).toList();
 
-      // 6. Call AI for deep analysis
+      // 6. Fetch custom prompt from database (if available)
+      final customPrompt = await _supabaseService.getAiPrompt();
+
+      // 7. Call AI for deep analysis
       final analysis = await _aiService.analyzeAsset(
         symbol: symbol,
         assetType: assetType,
         priceHistory: priceHistory,
         recentNews: recentNews,
         significantMoves: significantMoves,
+        customPromptTemplate: customPrompt,
       );
 
-      // 7. Save analysis
+      // 8. Save analysis
       await _alertService.saveAnalysis(analysis);
 
       // Increment analysis count in Supabase and refresh local state

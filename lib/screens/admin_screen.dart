@@ -11,16 +11,68 @@ class AdminScreen extends StatefulWidget {
 
 class _AdminScreenState extends State<AdminScreen> {
   final SupabaseService _supabaseService = SupabaseService();
+  final TextEditingController _promptController = TextEditingController();
 
   Map<String, dynamic>? _statistics;
   List<dynamic>? _users;
   bool _isLoading = true;
   String? _error;
 
+  // AI Prompt state
+  String? _originalPrompt;
+  bool _isPromptLoading = false;
+  bool _isPromptSaving = false;
+
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadAiPrompt();
+  }
+
+  @override
+  void dispose() {
+    _promptController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadAiPrompt() async {
+    setState(() => _isPromptLoading = true);
+    try {
+      final prompt = await _supabaseService.getAiPrompt();
+      if (prompt != null) {
+        _originalPrompt = prompt;
+        _promptController.text = prompt;
+      }
+    } catch (e) {
+      debugPrint('Error loading AI prompt: $e');
+    } finally {
+      setState(() => _isPromptLoading = false);
+    }
+  }
+
+  Future<void> _saveAiPrompt() async {
+    setState(() => _isPromptSaving = true);
+    try {
+      final response = await _supabaseService.adminSetAiPrompt(_promptController.text);
+      if (response['success'] == true) {
+        _originalPrompt = _promptController.text;
+        _showSnackBar('Prompt erfolgreich gespeichert', isError: false);
+      } else {
+        _showSnackBar(response['error'] ?? 'Fehler beim Speichern', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Fehler: $e', isError: true);
+    } finally {
+      setState(() => _isPromptSaving = false);
+    }
+  }
+
+  void _resetPrompt() {
+    if (_originalPrompt != null) {
+      _promptController.text = _originalPrompt!;
+      setState(() {});
+    }
   }
 
   Future<void> _loadData() async {
@@ -359,6 +411,8 @@ class _AdminScreenState extends State<AdminScreen> {
                       children: [
                         _buildStatisticsCard(),
                         const SizedBox(height: 16),
+                        _buildPromptCard(),
+                        const SizedBox(height: 16),
                         _buildUsersCard(),
                       ],
                     ),
@@ -462,6 +516,103 @@ class _AdminScreenState extends State<AdminScreen> {
             style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPromptCard() {
+    final hasChanges = _promptController.text != (_originalPrompt ?? '');
+
+    return Card(
+      color: AppColors.card,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.psychology, color: Colors.purple, size: 24),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'KI-Analyse Prompt',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                if (_isPromptLoading)
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Verfuegbare Platzhalter: {symbol}, {assetType}, {priceData}, {newsData}, {movesWithPrecedingNews}',
+              style: TextStyle(color: AppColors.textHint, fontSize: 11),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.cardLight,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+              ),
+              child: TextField(
+                controller: _promptController,
+                maxLines: 12,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 13,
+                  fontFamily: 'monospace',
+                ),
+                decoration: const InputDecoration(
+                  contentPadding: EdgeInsets.all(12),
+                  border: InputBorder.none,
+                  hintText: 'KI-Analyse Prompt eingeben...',
+                  hintStyle: TextStyle(color: AppColors.textHint),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (hasChanges) ...[
+                  TextButton.icon(
+                    onPressed: _resetPrompt,
+                    icon: const Icon(Icons.undo, size: 18),
+                    label: const Text('Zuruecksetzen'),
+                    style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                ElevatedButton.icon(
+                  onPressed: _isPromptSaving || !hasChanges ? null : _saveAiPrompt,
+                  icon: _isPromptSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.save, size: 18),
+                  label: Text(_isPromptSaving ? 'Speichern...' : 'Speichern'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: hasChanges ? AppColors.primary : AppColors.cardLight,
+                    foregroundColor: hasChanges ? Colors.white : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

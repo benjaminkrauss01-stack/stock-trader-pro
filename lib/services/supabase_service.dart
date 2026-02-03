@@ -301,4 +301,30 @@ class SupabaseService {
 
     return Map<String, dynamic>.from(response as Map);
   }
+
+  // ========== AI PROMPT OPERATIONS ==========
+
+  /// Get AI analysis prompt from database
+  Future<String?> getAiPrompt() async {
+    try {
+      final response = await _client.rpc('get_ai_prompt');
+      return response as String?;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Set AI analysis prompt (admin only)
+  Future<Map<String, dynamic>> adminSetAiPrompt(String prompt) async {
+    if (userId == null) {
+      return {'success': false, 'error': 'Nicht eingeloggt'};
+    }
+
+    final response = await _client.rpc('admin_set_ai_prompt', params: {
+      'p_admin_id': userId,
+      'p_prompt': prompt,
+    });
+
+    return Map<String, dynamic>.from(response as Map);
+  }
 }
