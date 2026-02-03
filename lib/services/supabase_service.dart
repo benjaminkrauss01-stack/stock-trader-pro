@@ -273,4 +273,32 @@ class SupabaseService {
     if (response == null) return [];
     return List<Map<String, dynamic>>.from(response as List);
   }
+
+  /// Toggle user active status (admin only)
+  Future<Map<String, dynamic>> adminToggleUserActive(String targetUserId) async {
+    if (userId == null) {
+      return {'success': false, 'error': 'Nicht eingeloggt'};
+    }
+
+    final response = await _client.rpc('admin_toggle_user_active', params: {
+      'p_admin_id': userId,
+      'p_target_user_id': targetUserId,
+    });
+
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  /// Delete user permanently (admin only)
+  Future<Map<String, dynamic>> adminDeleteUser(String targetUserId) async {
+    if (userId == null) {
+      return {'success': false, 'error': 'Nicht eingeloggt'};
+    }
+
+    final response = await _client.rpc('admin_delete_user', params: {
+      'p_admin_id': userId,
+      'p_target_user_id': targetUserId,
+    });
+
+    return Map<String, dynamic>.from(response as Map);
+  }
 }

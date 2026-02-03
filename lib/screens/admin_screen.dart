@@ -137,6 +137,141 @@ class _AdminScreenState extends State<AdminScreen> {
     }
   }
 
+  Future<void> _toggleUserActive(String userId, String email, bool isCurrentlyActive) async {
+    final action = isCurrentlyActive ? 'deaktivieren' : 'aktivieren';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text(
+          'Benutzer $action?',
+          style: const TextStyle(color: AppColors.textPrimary),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Moechten Sie den Benutzer "$email" wirklich $action?',
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            if (isCurrentlyActive)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning_amber, color: Colors.orange, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Deaktivierte Benutzer koennen sich nicht mehr einloggen.',
+                        style: TextStyle(color: Colors.orange, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isCurrentlyActive ? Colors.orange : AppColors.profit,
+            ),
+            child: Text(isCurrentlyActive ? 'Deaktivieren' : 'Aktivieren'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final response = await _supabaseService.adminToggleUserActive(userId);
+      if (response['success'] == true) {
+        final newStatus = response['is_active'] == true ? 'aktiviert' : 'deaktiviert';
+        _showSnackBar('Benutzer $newStatus', isError: false);
+        _loadData();
+      } else {
+        _showSnackBar(response['error'] ?? 'Fehler', isError: true);
+      }
+    }
+  }
+
+  Future<void> _deleteUser(String userId, String email) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text(
+          'Benutzer loeschen?',
+          style: TextStyle(color: AppColors.loss),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Moechten Sie den Benutzer "$email" wirklich DAUERHAFT loeschen?',
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.loss.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.loss.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.warning, color: AppColors.loss, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Diese Aktion kann NICHT rueckgaengig gemacht werden! Alle Daten des Benutzers werden geloescht.',
+                      style: TextStyle(color: AppColors.loss, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.loss),
+            child: const Text('Endgueltig loeschen'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final response = await _supabaseService.adminDeleteUser(userId);
+      if (response['success'] == true) {
+        _showSnackBar('Benutzer geloescht', isError: false);
+        _loadData();
+      } else {
+        _showSnackBar(response['error'] ?? 'Fehler', isError: true);
+      }
+    }
+  }
+
   void _showSnackBar(String message, {required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -389,15 +524,20 @@ class _AdminScreenState extends State<AdminScreen> {
     final displayName = user['display_name'] as String?;
     final analysesUsed = user['ai_analyses_used'] as int? ?? 0;
     final userId = user['id'] as String;
+    final isActive = user['is_active'] as bool? ?? true;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.cardLight,
+        color: isActive ? AppColors.cardLight : AppColors.cardLight.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: tier == 'admin' ? Colors.purple.withValues(alpha: 0.5) : Colors.transparent,
+          color: !isActive
+              ? AppColors.loss.withValues(alpha: 0.5)
+              : tier == 'admin'
+                  ? Colors.purple.withValues(alpha: 0.5)
+                  : Colors.transparent,
           width: 1,
         ),
       ),
@@ -449,6 +589,20 @@ class _AdminScreenState extends State<AdminScreen> {
                       '$analysesUsed Analysen',
                       style: const TextStyle(color: AppColors.textHint, fontSize: 11),
                     ),
+                    if (!isActive) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.loss.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'INAKTIV',
+                          style: TextStyle(color: AppColors.loss, fontSize: 9, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -462,6 +616,10 @@ class _AdminScreenState extends State<AdminScreen> {
                 _changeUserTier(userId, tier);
               } else if (action == 'reset') {
                 _resetUserAnalyses(userId, email);
+              } else if (action == 'toggle_active') {
+                _toggleUserActive(userId, email, isActive);
+              } else if (action == 'delete') {
+                _deleteUser(userId, email);
               }
             },
             itemBuilder: (context) => [
@@ -482,6 +640,33 @@ class _AdminScreenState extends State<AdminScreen> {
                     Icon(Icons.refresh, color: AppColors.textPrimary, size: 20),
                     SizedBox(width: 8),
                     Text('Analysen zuruecksetzen', style: TextStyle(color: AppColors.textPrimary)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'toggle_active',
+                child: Row(
+                  children: [
+                    Icon(
+                      isActive ? Icons.block : Icons.check_circle,
+                      color: isActive ? Colors.orange : AppColors.profit,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isActive ? 'Deaktivieren' : 'Aktivieren',
+                      style: TextStyle(color: isActive ? Colors.orange : AppColors.profit),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_forever, color: AppColors.loss, size: 20),
+                    SizedBox(width: 8),
+                    Text('Loeschen', style: TextStyle(color: AppColors.loss)),
                   ],
                 ),
               ),
