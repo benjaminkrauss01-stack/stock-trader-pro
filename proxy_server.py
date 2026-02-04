@@ -205,84 +205,240 @@ class CORSProxyHandler(SimpleHTTPRequestHandler):
 
         return {'quoteResponse': {'result': results, 'error': None}}
 
+    # Stock database with symbols and searchable names/keywords
+    STOCK_DATABASE = [
+        # Tech Giants
+        {'symbol': 'AAPL', 'name': 'Apple Inc.', 'keywords': ['apple', 'iphone', 'mac', 'ipad']},
+        {'symbol': 'MSFT', 'name': 'Microsoft Corporation', 'keywords': ['microsoft', 'windows', 'azure', 'xbox']},
+        {'symbol': 'GOOGL', 'name': 'Alphabet Inc.', 'keywords': ['google', 'alphabet', 'youtube', 'android']},
+        {'symbol': 'GOOG', 'name': 'Alphabet Inc. Class C', 'keywords': ['google', 'alphabet']},
+        {'symbol': 'AMZN', 'name': 'Amazon.com Inc.', 'keywords': ['amazon', 'aws', 'prime']},
+        {'symbol': 'META', 'name': 'Meta Platforms Inc.', 'keywords': ['meta', 'facebook', 'instagram', 'whatsapp']},
+        {'symbol': 'NVDA', 'name': 'NVIDIA Corporation', 'keywords': ['nvidia', 'geforce', 'gpu', 'grafikkarte']},
+        {'symbol': 'TSLA', 'name': 'Tesla Inc.', 'keywords': ['tesla', 'elon', 'musk', 'elektroauto']},
+        {'symbol': 'AMD', 'name': 'Advanced Micro Devices', 'keywords': ['amd', 'ryzen', 'radeon', 'prozessor']},
+        {'symbol': 'INTC', 'name': 'Intel Corporation', 'keywords': ['intel', 'prozessor', 'chip']},
+        {'symbol': 'NFLX', 'name': 'Netflix Inc.', 'keywords': ['netflix', 'streaming']},
+        {'symbol': 'ADBE', 'name': 'Adobe Inc.', 'keywords': ['adobe', 'photoshop', 'creative']},
+        {'symbol': 'CRM', 'name': 'Salesforce Inc.', 'keywords': ['salesforce', 'crm', 'cloud']},
+        {'symbol': 'ORCL', 'name': 'Oracle Corporation', 'keywords': ['oracle', 'database', 'java']},
+        {'symbol': 'IBM', 'name': 'IBM Corporation', 'keywords': ['ibm', 'watson', 'mainframe']},
+        {'symbol': 'CSCO', 'name': 'Cisco Systems Inc.', 'keywords': ['cisco', 'netzwerk', 'router']},
+        {'symbol': 'QCOM', 'name': 'Qualcomm Inc.', 'keywords': ['qualcomm', 'snapdragon', 'chip']},
+        {'symbol': 'TXN', 'name': 'Texas Instruments', 'keywords': ['texas', 'instruments', 'halbleiter']},
+        {'symbol': 'AVGO', 'name': 'Broadcom Inc.', 'keywords': ['broadcom', 'chip', 'halbleiter']},
+        {'symbol': 'MU', 'name': 'Micron Technology', 'keywords': ['micron', 'speicher', 'memory']},
+
+        # Finance
+        {'symbol': 'JPM', 'name': 'JPMorgan Chase & Co.', 'keywords': ['jpmorgan', 'chase', 'bank']},
+        {'symbol': 'BAC', 'name': 'Bank of America Corp.', 'keywords': ['bank', 'america', 'bofa']},
+        {'symbol': 'WFC', 'name': 'Wells Fargo & Co.', 'keywords': ['wells', 'fargo', 'bank']},
+        {'symbol': 'GS', 'name': 'Goldman Sachs Group', 'keywords': ['goldman', 'sachs', 'investment']},
+        {'symbol': 'MS', 'name': 'Morgan Stanley', 'keywords': ['morgan', 'stanley', 'investment']},
+        {'symbol': 'V', 'name': 'Visa Inc.', 'keywords': ['visa', 'kreditkarte', 'payment']},
+        {'symbol': 'MA', 'name': 'Mastercard Inc.', 'keywords': ['mastercard', 'kreditkarte', 'payment']},
+        {'symbol': 'PYPL', 'name': 'PayPal Holdings Inc.', 'keywords': ['paypal', 'payment', 'venmo']},
+        {'symbol': 'SQ', 'name': 'Block Inc.', 'keywords': ['block', 'square', 'payment', 'cash app']},
+        {'symbol': 'BLK', 'name': 'BlackRock Inc.', 'keywords': ['blackrock', 'asset', 'etf']},
+
+        # Healthcare
+        {'symbol': 'JNJ', 'name': 'Johnson & Johnson', 'keywords': ['johnson', 'pharma', 'medizin']},
+        {'symbol': 'UNH', 'name': 'UnitedHealth Group', 'keywords': ['united', 'health', 'versicherung']},
+        {'symbol': 'PFE', 'name': 'Pfizer Inc.', 'keywords': ['pfizer', 'pharma', 'impfstoff']},
+        {'symbol': 'MRK', 'name': 'Merck & Co.', 'keywords': ['merck', 'pharma', 'medikament']},
+        {'symbol': 'ABBV', 'name': 'AbbVie Inc.', 'keywords': ['abbvie', 'pharma', 'humira']},
+        {'symbol': 'LLY', 'name': 'Eli Lilly and Co.', 'keywords': ['lilly', 'eli', 'pharma', 'diabetes']},
+        {'symbol': 'BMY', 'name': 'Bristol-Myers Squibb', 'keywords': ['bristol', 'myers', 'squibb', 'pharma']},
+        {'symbol': 'AMGN', 'name': 'Amgen Inc.', 'keywords': ['amgen', 'biotech', 'pharma']},
+        {'symbol': 'GILD', 'name': 'Gilead Sciences', 'keywords': ['gilead', 'biotech', 'hiv']},
+        {'symbol': 'MRNA', 'name': 'Moderna Inc.', 'keywords': ['moderna', 'mrna', 'impfstoff', 'vaccine']},
+
+        # Consumer
+        {'symbol': 'WMT', 'name': 'Walmart Inc.', 'keywords': ['walmart', 'supermarkt', 'retail']},
+        {'symbol': 'COST', 'name': 'Costco Wholesale Corp.', 'keywords': ['costco', 'großhandel', 'retail']},
+        {'symbol': 'HD', 'name': 'Home Depot Inc.', 'keywords': ['home', 'depot', 'baumarkt']},
+        {'symbol': 'TGT', 'name': 'Target Corporation', 'keywords': ['target', 'retail', 'supermarkt']},
+        {'symbol': 'NKE', 'name': 'Nike Inc.', 'keywords': ['nike', 'sport', 'schuhe', 'sneaker']},
+        {'symbol': 'SBUX', 'name': 'Starbucks Corporation', 'keywords': ['starbucks', 'kaffee', 'coffee']},
+        {'symbol': 'MCD', 'name': 'McDonald\'s Corporation', 'keywords': ['mcdonald', 'burger', 'fastfood']},
+        {'symbol': 'KO', 'name': 'Coca-Cola Company', 'keywords': ['coca', 'cola', 'coke', 'getränk']},
+        {'symbol': 'PEP', 'name': 'PepsiCo Inc.', 'keywords': ['pepsi', 'cola', 'frito', 'lay']},
+        {'symbol': 'PG', 'name': 'Procter & Gamble Co.', 'keywords': ['procter', 'gamble', 'pampers', 'gillette']},
+
+        # Telecom & Media
+        {'symbol': 'DIS', 'name': 'Walt Disney Company', 'keywords': ['disney', 'marvel', 'pixar', 'star wars']},
+        {'symbol': 'T', 'name': 'AT&T Inc.', 'keywords': ['att', 'at&t', 'telekom']},
+        {'symbol': 'VZ', 'name': 'Verizon Communications', 'keywords': ['verizon', 'telekom', 'mobilfunk']},
+        {'symbol': 'TMUS', 'name': 'T-Mobile US Inc.', 'keywords': ['t-mobile', 'tmobile', 'mobilfunk']},
+        {'symbol': 'CMCSA', 'name': 'Comcast Corporation', 'keywords': ['comcast', 'nbc', 'universal']},
+        {'symbol': 'PARA', 'name': 'Paramount Global', 'keywords': ['paramount', 'cbs', 'film']},
+        {'symbol': 'WBD', 'name': 'Warner Bros. Discovery', 'keywords': ['warner', 'bros', 'hbo', 'discovery']},
+
+        # Automotive
+        {'symbol': 'F', 'name': 'Ford Motor Company', 'keywords': ['ford', 'auto', 'mustang']},
+        {'symbol': 'GM', 'name': 'General Motors Co.', 'keywords': ['general', 'motors', 'chevrolet', 'gmc']},
+        {'symbol': 'TM', 'name': 'Toyota Motor Corp.', 'keywords': ['toyota', 'auto', 'lexus']},
+        {'symbol': 'HMC', 'name': 'Honda Motor Co.', 'keywords': ['honda', 'auto', 'acura']},
+        {'symbol': 'RIVN', 'name': 'Rivian Automotive', 'keywords': ['rivian', 'elektroauto', 'ev']},
+        {'symbol': 'LCID', 'name': 'Lucid Group Inc.', 'keywords': ['lucid', 'elektroauto', 'ev']},
+
+        # Energy
+        {'symbol': 'XOM', 'name': 'Exxon Mobil Corp.', 'keywords': ['exxon', 'mobil', 'öl', 'oil']},
+        {'symbol': 'CVX', 'name': 'Chevron Corporation', 'keywords': ['chevron', 'öl', 'oil', 'gas']},
+        {'symbol': 'COP', 'name': 'ConocoPhillips', 'keywords': ['conoco', 'phillips', 'öl']},
+        {'symbol': 'SLB', 'name': 'Schlumberger Ltd.', 'keywords': ['schlumberger', 'öl', 'drilling']},
+
+        # E-Commerce & Social
+        {'symbol': 'SHOP', 'name': 'Shopify Inc.', 'keywords': ['shopify', 'ecommerce', 'online shop']},
+        {'symbol': 'ETSY', 'name': 'Etsy Inc.', 'keywords': ['etsy', 'handmade', 'marketplace']},
+        {'symbol': 'EBAY', 'name': 'eBay Inc.', 'keywords': ['ebay', 'auktion', 'marketplace']},
+        {'symbol': 'PINS', 'name': 'Pinterest Inc.', 'keywords': ['pinterest', 'social', 'bilder']},
+        {'symbol': 'SNAP', 'name': 'Snap Inc.', 'keywords': ['snap', 'snapchat', 'social']},
+        {'symbol': 'TWTR', 'name': 'Twitter Inc.', 'keywords': ['twitter', 'x', 'social']},
+        {'symbol': 'SPOT', 'name': 'Spotify Technology', 'keywords': ['spotify', 'musik', 'streaming']},
+        {'symbol': 'RBLX', 'name': 'Roblox Corporation', 'keywords': ['roblox', 'gaming', 'metaverse']},
+        {'symbol': 'U', 'name': 'Unity Software Inc.', 'keywords': ['unity', 'gaming', 'engine']},
+
+        # Travel & Airlines
+        {'symbol': 'DAL', 'name': 'Delta Air Lines', 'keywords': ['delta', 'airline', 'flug']},
+        {'symbol': 'UAL', 'name': 'United Airlines', 'keywords': ['united', 'airline', 'flug']},
+        {'symbol': 'AAL', 'name': 'American Airlines', 'keywords': ['american', 'airline', 'flug']},
+        {'symbol': 'LUV', 'name': 'Southwest Airlines', 'keywords': ['southwest', 'airline', 'flug']},
+        {'symbol': 'ABNB', 'name': 'Airbnb Inc.', 'keywords': ['airbnb', 'unterkunft', 'travel']},
+        {'symbol': 'BKNG', 'name': 'Booking Holdings', 'keywords': ['booking', 'hotel', 'travel']},
+        {'symbol': 'EXPE', 'name': 'Expedia Group', 'keywords': ['expedia', 'travel', 'hotel']},
+        {'symbol': 'MAR', 'name': 'Marriott International', 'keywords': ['marriott', 'hotel']},
+        {'symbol': 'HLT', 'name': 'Hilton Worldwide', 'keywords': ['hilton', 'hotel']},
+
+        # Semiconductor & AI
+        {'symbol': 'TSM', 'name': 'Taiwan Semiconductor', 'keywords': ['taiwan', 'tsmc', 'chip', 'semiconductor']},
+        {'symbol': 'ASML', 'name': 'ASML Holding', 'keywords': ['asml', 'lithographie', 'chip']},
+        {'symbol': 'ARM', 'name': 'Arm Holdings', 'keywords': ['arm', 'chip', 'prozessor', 'mobile']},
+        {'symbol': 'MRVL', 'name': 'Marvell Technology', 'keywords': ['marvell', 'chip', 'data center']},
+        {'symbol': 'LRCX', 'name': 'Lam Research Corp.', 'keywords': ['lam', 'research', 'semiconductor']},
+        {'symbol': 'AMAT', 'name': 'Applied Materials', 'keywords': ['applied', 'materials', 'semiconductor']},
+        {'symbol': 'KLAC', 'name': 'KLA Corporation', 'keywords': ['kla', 'semiconductor', 'inspection']},
+        {'symbol': 'PLTR', 'name': 'Palantir Technologies', 'keywords': ['palantir', 'ai', 'daten', 'analytics']},
+        {'symbol': 'AI', 'name': 'C3.ai Inc.', 'keywords': ['c3', 'ai', 'artificial intelligence']},
+
+        # Crypto & Fintech
+        {'symbol': 'COIN', 'name': 'Coinbase Global', 'keywords': ['coinbase', 'crypto', 'bitcoin', 'exchange']},
+        {'symbol': 'MSTR', 'name': 'MicroStrategy Inc.', 'keywords': ['microstrategy', 'bitcoin', 'btc']},
+        {'symbol': 'HOOD', 'name': 'Robinhood Markets', 'keywords': ['robinhood', 'trading', 'broker']},
+        {'symbol': 'SOFI', 'name': 'SoFi Technologies', 'keywords': ['sofi', 'fintech', 'bank']},
+        {'symbol': 'AFRM', 'name': 'Affirm Holdings', 'keywords': ['affirm', 'buy now pay later', 'bnpl']},
+
+        # Indices & ETFs
+        {'symbol': 'SPY', 'name': 'SPDR S&P 500 ETF', 'keywords': ['spy', 's&p', 'sp500', 'index', 'etf']},
+        {'symbol': 'QQQ', 'name': 'Invesco QQQ Trust', 'keywords': ['qqq', 'nasdaq', 'tech', 'etf']},
+        {'symbol': 'IWM', 'name': 'iShares Russell 2000', 'keywords': ['iwm', 'russell', 'small cap', 'etf']},
+        {'symbol': 'DIA', 'name': 'SPDR Dow Jones ETF', 'keywords': ['dia', 'dow', 'jones', 'etf']},
+        {'symbol': 'VOO', 'name': 'Vanguard S&P 500 ETF', 'keywords': ['voo', 's&p', 'vanguard', 'etf']},
+        {'symbol': 'VTI', 'name': 'Vanguard Total Stock', 'keywords': ['vti', 'total', 'market', 'etf']},
+        {'symbol': 'ARKK', 'name': 'ARK Innovation ETF', 'keywords': ['ark', 'innovation', 'cathie', 'wood']},
+
+        # German/European Stocks
+        {'symbol': 'SAP', 'name': 'SAP SE', 'keywords': ['sap', 'software', 'erp', 'deutschland']},
+        {'symbol': 'ASML', 'name': 'ASML Holding NV', 'keywords': ['asml', 'niederlande', 'chip']},
+        {'symbol': 'NVO', 'name': 'Novo Nordisk', 'keywords': ['novo', 'nordisk', 'ozempic', 'diabetes']},
+    ]
+
     def search_symbols(self, query):
-        """Search for symbols"""
+        """Search for symbols by symbol or company name"""
         if not query:
             return {'quotes': [], 'news': []}
 
         try:
-            # Use yfinance search
-            tickers = yf.Tickers(query)
             results = []
             news_results = []
+            query_lower = query.lower()
+            query_upper = query.upper()
+            added_symbols = set()
 
-            # Try to get info for the query as a ticker
-            ticker_found = False
-            try:
-                ticker = yf.Ticker(query)
-                info = ticker.info
-                if info.get('symbol'):
-                    ticker_found = True
+            # 1. Exact symbol match (highest priority)
+            for stock in self.STOCK_DATABASE:
+                if stock['symbol'].upper() == query_upper:
                     results.append({
-                        'symbol': info.get('symbol', query),
-                        'shortname': info.get('shortName', query),
-                        'longname': info.get('longName', query),
-                        'exchange': info.get('exchange', ''),
-                        'quoteType': info.get('quoteType', 'EQUITY'),
+                        'symbol': stock['symbol'],
+                        'shortname': stock['name'],
+                        'longname': stock['name'],
+                        'exchange': 'NASDAQ/NYSE',
+                        'quoteType': 'EQUITY',
                         'score': 100000,
                     })
+                    added_symbols.add(stock['symbol'])
+                    break
 
-                    # Get news for the searched ticker
-                    try:
-                        news = ticker.news
-                        if news:
-                            for article in news[:20]:  # Limit to 20 news items
-                                news_results.append(self._format_news_article(article))
-                    except:
-                        pass
-            except:
-                pass
+            # 2. Search in company names and keywords
+            for stock in self.STOCK_DATABASE:
+                if stock['symbol'] in added_symbols:
+                    continue
 
-            # If no specific ticker found, get general market news from SPY
-            if not ticker_found or not news_results:
+                score = 0
+                name_lower = stock['name'].lower()
+
+                # Check if query matches start of symbol
+                if stock['symbol'].upper().startswith(query_upper):
+                    score = 80000
+                # Check if query matches start of name
+                elif name_lower.startswith(query_lower):
+                    score = 70000
+                # Check if query is in name
+                elif query_lower in name_lower:
+                    score = 60000
+                # Check keywords
+                else:
+                    for keyword in stock.get('keywords', []):
+                        if query_lower in keyword.lower():
+                            score = 50000
+                            break
+                        if keyword.lower().startswith(query_lower):
+                            score = 55000
+                            break
+
+                if score > 0:
+                    results.append({
+                        'symbol': stock['symbol'],
+                        'shortname': stock['name'],
+                        'longname': stock['name'],
+                        'exchange': 'NASDAQ/NYSE',
+                        'quoteType': 'EQUITY',
+                        'score': score,
+                    })
+                    added_symbols.add(stock['symbol'])
+
+            # 3. If still no results, try yfinance lookup
+            if not results:
                 try:
-                    market_ticker = yf.Ticker('SPY')
-                    news = market_ticker.news
-                    if news:
-                        for article in news[:20]:
-                            formatted = self._format_news_article(article)
-                            # Avoid duplicates
-                            if not any(n.get('uuid') == formatted.get('uuid') for n in news_results):
-                                news_results.append(formatted)
+                    ticker = yf.Ticker(query_upper)
+                    info = ticker.info
+                    if info.get('symbol'):
+                        results.append({
+                            'symbol': info.get('symbol', query_upper),
+                            'shortname': info.get('shortName', query_upper),
+                            'longname': info.get('longName', query_upper),
+                            'exchange': info.get('exchange', ''),
+                            'quoteType': info.get('quoteType', 'EQUITY'),
+                            'score': 40000,
+                        })
                 except:
                     pass
 
-            # Common symbols that might match
-            common_symbols = [
-                'AAPL', 'GOOGL', 'GOOG', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA',
-                'JPM', 'V', 'JNJ', 'WMT', 'PG', 'MA', 'UNH', 'HD', 'DIS', 'PYPL',
-                'NFLX', 'ADBE', 'CRM', 'INTC', 'AMD', 'CSCO', 'PEP', 'KO', 'ABT',
-                'NKE', 'MRK', 'T', 'VZ', 'ORCL', 'IBM', 'QCOM', 'TXN', 'COST',
-            ]
+            # Sort by score and limit to 15 results
+            results.sort(key=lambda x: x.get('score', 0), reverse=True)
+            results = results[:15]
 
-            query_upper = query.upper()
-            for sym in common_symbols:
-                if query_upper in sym and sym != query.upper():
-                    try:
-                        ticker = yf.Ticker(sym)
-                        info = ticker.info
-                        results.append({
-                            'symbol': sym,
-                            'shortname': info.get('shortName', sym),
-                            'longname': info.get('longName', sym),
-                            'exchange': info.get('exchange', ''),
-                            'quoteType': info.get('quoteType', 'EQUITY'),
-                            'score': 50000,
-                        })
-                    except:
-                        pass
-                if len(results) >= 10:
-                    break
+            # Get news for the top result
+            if results:
+                try:
+                    top_symbol = results[0]['symbol']
+                    ticker = yf.Ticker(top_symbol)
+                    news = ticker.news
+                    if news:
+                        for article in news[:10]:
+                            news_results.append(self._format_news_article(article))
+                except:
+                    pass
 
             return {'quotes': results, 'news': news_results}
         except Exception as e:
