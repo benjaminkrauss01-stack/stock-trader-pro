@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/analysis.dart';
-import '../models/stock.dart';
 import '../providers/analysis_provider.dart';
 import '../utils/constants.dart';
 import '../widgets/analysis_chart_widget.dart';
@@ -18,7 +17,6 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
   final TextEditingController _symbolController = TextEditingController();
   String _selectedAssetType = 'Stock';
   String? _expandedSymbol; // Welches Symbol ist gerade ausgeklappt
-  final Map<String, List<StockCandle>> _symbolChartData = {}; // Cache für Chart-Daten
 
   @override
   void initState() {

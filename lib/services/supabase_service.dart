@@ -327,4 +327,77 @@ class SupabaseService {
 
     return Map<String, dynamic>.from(response as Map);
   }
+
+  // ========== ANALYSIS CACHE OPERATIONS ==========
+
+  /// Get cached analysis for a symbol (if < 1 hour old)
+  Future<Map<String, dynamic>?> getCachedAnalysis(String symbol) async {
+    try {
+      final response = await _client.rpc('get_cached_analysis', params: {
+        'p_symbol': symbol.toUpperCase(),
+      });
+
+      final result = Map<String, dynamic>.from(response as Map);
+      if (result['found'] == true) {
+        return result;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Save analysis to cache
+  Future<bool> saveCachedAnalysis({
+    required String symbol,
+    required String assetType,
+    required String direction,
+    required double confidence,
+    required double probabilitySignificantMove,
+    required double expectedMovePercent,
+    required int timeframeDays,
+    required List<String> keyTriggers,
+    required List<Map<String, dynamic>> historicalPatterns,
+    required List<Map<String, dynamic>> newsCorrelations,
+    required List<Map<String, dynamic>> newsPatterns,
+    required List<String> riskFactors,
+    required String recommendation,
+    required String summary,
+    required DateTime analyzedAt,
+  }) async {
+    try {
+      final response = await _client.rpc('save_cached_analysis', params: {
+        'p_symbol': symbol.toUpperCase(),
+        'p_asset_type': assetType,
+        'p_direction': direction,
+        'p_confidence': confidence,
+        'p_probability_significant_move': probabilitySignificantMove,
+        'p_expected_move_percent': expectedMovePercent,
+        'p_timeframe_days': timeframeDays,
+        'p_key_triggers': keyTriggers,
+        'p_historical_patterns': historicalPatterns,
+        'p_news_correlations': newsCorrelations,
+        'p_news_patterns': newsPatterns,
+        'p_risk_factors': riskFactors,
+        'p_recommendation': recommendation,
+        'p_summary': summary,
+        'p_analyzed_at': analyzedAt.toIso8601String(),
+      });
+
+      final result = Map<String, dynamic>.from(response as Map);
+      return result['success'] == true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Get cache statistics (for admin)
+  Future<Map<String, dynamic>> getCacheStatistics() async {
+    try {
+      final response = await _client.rpc('get_cache_statistics');
+      return Map<String, dynamic>.from(response as Map);
+    } catch (e) {
+      return {'total_cached': 0, 'fresh_count': 0, 'expired_count': 0};
+    }
+  }
 }

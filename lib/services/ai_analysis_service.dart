@@ -88,80 +88,17 @@ class AIAnalysisService {
       return '$moveInfo\n  Vorhergehende Nachrichten (7 Tage):\n$precedingNewsStr';
     }).join('\n\n');
 
-    // Use custom prompt template if provided, otherwise use default
-    if (customPromptTemplate != null && customPromptTemplate.isNotEmpty) {
-      return customPromptTemplate
-          .replaceAll('{symbol}', symbol)
-          .replaceAll('{assetType}', assetType)
-          .replaceAll('{priceData}', priceData)
-          .replaceAll('{newsData}', newsData)
-          .replaceAll('{movesWithPrecedingNews}', movesWithPrecedingNews);
+    // Database prompt is required - no hardcoded fallback
+    if (customPromptTemplate == null || customPromptTemplate.isEmpty) {
+      throw Exception('Kein KI-Analyse Prompt in der Datenbank gefunden. Bitte im Admin Panel konfigurieren.');
     }
 
-    return '''
-Analysiere die folgenden Daten für $symbol ($assetType) und identifiziere Muster.
-
-## PREISVERLAUF (letzte 90 Tage)
-$priceData
-
-## SIGNIFIKANTE BEWEGUNGEN (>5%) MIT VORHERGEHENDEN NACHRICHTEN
-Für jede signifikante Bewegung sind die Nachrichten der 7 Tage davor aufgelistet.
-Analysiere diese Nachrichten, um wiederkehrende Muster zu erkennen, die Bewegungen vorhersagen.
-
-$movesWithPrecedingNews
-
-## AKTUELLE NACHRICHTEN (letzte 7 Tage)
-Vergleiche diese mit den Mustern aus den vorhergehenden Nachrichten bei signifikanten Bewegungen.
-$newsData
-
-## AUFGABE
-1. Analysiere die Nachrichten VOR jeder signifikanten Bewegung und identifiziere wiederkehrende Muster
-   - Welche Arten von Nachrichten (Themen, Sentiment, Quellen) traten häufig vor Bewegungen auf?
-   - Gibt es typische Zeitverzögerungen zwischen bestimmten Nachrichtentypen und Preisbewegungen?
-2. Vergleiche die aktuellen Nachrichten mit diesen historischen Mustern
-   - Welche aktuellen Nachrichten ähneln den Mustern, die früher zu Bewegungen führten?
-   - Wie hoch ist die Übereinstimmung?
-3. Bewerte die Wahrscheinlichkeit einer baldigen signifikanten Bewegung basierend auf den erkannten Mustern
-4. Gib eine klare Richtungsindikation (BULLISH/BEARISH/NEUTRAL)
-
-## ANTWORT FORMAT (JSON)
-{
-  "direction": "BULLISH" | "BEARISH" | "NEUTRAL",
-  "confidence": 0-100,
-  "probability_significant_move": 0-100,
-  "expected_move_percent": number,
-  "timeframe_days": number,
-  "key_triggers": ["trigger1", "trigger2"],
-  "historical_patterns": [
-    {
-      "pattern": "beschreibung",
-      "occurred_before": "datum",
-      "resulted_in": "beschreibung der folge",
-      "relevance_score": 0-100
-    }
-  ],
-  "news_correlations": [
-    {
-      "news_event": "headline",
-      "price_impact": "beschreibung",
-      "delay_days": number
-    }
-  ],
-  "news_patterns": [
-    {
-      "pattern_type": "z.B. earnings_warning, analyst_sentiment, sector_rotation, regulatory_news",
-      "description": "Beschreibung des erkannten Musters in den Nachrichten vor Bewegungen",
-      "historical_occurrences": number,
-      "avg_subsequent_move": number,
-      "matched_current_news": ["headline1 die diesem Muster entspricht", "headline2"],
-      "match_confidence": 0-100
-    }
-  ],
-  "risk_factors": ["risiko1", "risiko2"],
-  "recommendation": "kurze handlungsempfehlung",
-  "summary": "2-3 Sätze Zusammenfassung mit Fokus auf erkannte News-Patterns"
-}
-''';
+    return customPromptTemplate
+        .replaceAll('{symbol}', symbol)
+        .replaceAll('{assetType}', assetType)
+        .replaceAll('{priceData}', priceData)
+        .replaceAll('{newsData}', newsData)
+        .replaceAll('{movesWithPrecedingNews}', movesWithPrecedingNews);
   }
 
   Future<String> _callOpenAI(

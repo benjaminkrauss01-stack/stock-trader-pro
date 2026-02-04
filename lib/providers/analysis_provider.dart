@@ -125,17 +125,65 @@ class AnalysisProvider extends ChangeNotifier {
     }
   }
 
+  // Cache tracking
+  bool _usedCache = false;
+  int? _cacheAgeMinutes;
+
+  bool get usedCache => _usedCache;
+  int? get cacheAgeMinutes => _cacheAgeMinutes;
+
   Future<MarketAnalysis?> analyzeAsset({
     required String symbol,
     required String assetType,
+    bool forceRefresh = false, // Erzwingt neue Analyse auch wenn Cache vorhanden
   }) async {
     _isAnalyzing = true;
     _error = null;
     _currentAnalysis = null;
     _currentChartData = [];
+    _usedCache = false;
+    _cacheAgeMinutes = null;
     notifyListeners();
 
     try {
+      // ============================================
+      // CACHE CHECK: Prüfe ob gecachte Analyse < 1h existiert
+      // ============================================
+      if (!forceRefresh) {
+        final cachedResult = await _supabaseService.getCachedAnalysis(symbol);
+        if (cachedResult != null && cachedResult['found'] == true) {
+          final cachedAnalysis = _parseCachedAnalysis(cachedResult['data']);
+          if (cachedAnalysis != null) {
+            _cacheAgeMinutes = (cachedResult['age_minutes'] as num?)?.round();
+            _usedCache = true;
+
+            // Lade Chart-Daten für die Anzeige
+            final candles = await _stockService.getChartData(symbol, '3mo', '1d');
+            if (candles.isNotEmpty) {
+              _currentChartData = candles;
+              _currentChartRange = '3M';
+            }
+
+            // Speichere in lokaler Historie (ohne Limit-Zählung)
+            await _alertService.saveAnalysis(cachedAnalysis);
+
+            _currentAnalysis = cachedAnalysis;
+            _savedAnalyses = await _alertService.getSavedAnalyses();
+            _statistics = await _alertService.getStatistics();
+
+            _isAnalyzing = false;
+            notifyListeners();
+
+            debugPrint('📦 Cache-Hit für $symbol (${_cacheAgeMinutes}min alt)');
+            return cachedAnalysis;
+          }
+        }
+      }
+
+      // ============================================
+      // KEIN CACHE: Neue Analyse durchführen
+      // ============================================
+
       // Check analysis limit before proceeding
       final limitCheck = await _supabaseService.checkAnalysisLimit();
       final allowed = limitCheck['allowed'] as bool? ?? false;
@@ -223,12 +271,17 @@ class AnalysisProvider extends ChangeNotifier {
         customPromptTemplate: customPrompt,
       );
 
-      // 8. Save analysis
+      // 8. Save analysis locally
       await _alertService.saveAnalysis(analysis);
+
+      // 9. Save to global cache for other users
+      await _saveToCacheAsync(analysis);
 
       // Increment analysis count in Supabase and refresh local state
       await _supabaseService.incrementAnalysisCount();
       await updateLimitsFromSupabase();
+
+      debugPrint('🤖 Neue KI-Analyse für $symbol erstellt und gecacht');
 
       _currentAnalysis = analysis;
       _savedAnalyses = await _alertService.getSavedAnalyses();
@@ -340,6 +393,128 @@ class AnalysisProvider extends ChangeNotifier {
     if (positiveCount > negativeCount) return 'positive';
     if (negativeCount > positiveCount) return 'negative';
     return 'neutral';
+  }
+
+  // ============================================
+  // CACHE HELPER METHODS
+  // ============================================
+
+  /// Parst gecachte Analyse-Daten zurück zu MarketAnalysis
+  MarketAnalysis? _parseCachedAnalysis(Map<String, dynamic>? data) {
+    if (data == null) return null;
+
+    try {
+      final directionStr = data['direction'] as String? ?? 'neutral';
+      final direction = AnalysisDirection.values.firstWhere(
+        (e) => e.name.toLowerCase() == directionStr.toLowerCase(),
+        orElse: () => AnalysisDirection.neutral,
+      );
+
+      return MarketAnalysis(
+        symbol: data['symbol'] as String,
+        assetType: data['asset_type'] as String,
+        analyzedAt: DateTime.parse(data['analyzed_at'] as String),
+        direction: direction,
+        confidence: (data['confidence'] as num).toDouble(),
+        probabilitySignificantMove: (data['probability_significant_move'] as num?)?.toDouble() ?? 0,
+        expectedMovePercent: (data['expected_move_percent'] as num).toDouble(),
+        timeframeDays: data['timeframe_days'] as int? ?? 7,
+        keyTriggers: List<String>.from(data['key_triggers'] ?? []),
+        historicalPatterns: _parseHistoricalPatterns(data['historical_patterns']),
+        newsCorrelations: _parseNewsCorrelations(data['news_correlations']),
+        newsPatterns: _parseNewsPatterns(data['news_patterns']),
+        riskFactors: List<String>.from(data['risk_factors'] ?? []),
+        recommendation: data['recommendation'] as String,
+        summary: data['summary'] as String,
+      );
+    } catch (e) {
+      debugPrint('Error parsing cached analysis: $e');
+      return null;
+    }
+  }
+
+  List<HistoricalPattern> _parseHistoricalPatterns(dynamic data) {
+    if (data == null) return [];
+    try {
+      return (data as List).map((p) => HistoricalPattern(
+        pattern: p['pattern'] ?? '',
+        occurredBefore: DateTime.tryParse(p['occurred_before'] ?? '') ?? DateTime.now(),
+        resultedIn: p['resulted_in'] ?? '',
+        relevanceScore: (p['relevance_score'] as num?)?.toDouble() ?? 0,
+      )).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  List<NewsCorrelation> _parseNewsCorrelations(dynamic data) {
+    if (data == null) return [];
+    try {
+      return (data as List).map((n) => NewsCorrelation(
+        newsEvent: n['news_event'] ?? '',
+        priceImpact: n['price_impact'] ?? '',
+        delayDays: n['delay_days'] ?? 0,
+      )).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  List<NewsPattern> _parseNewsPatterns(dynamic data) {
+    if (data == null) return [];
+    try {
+      return (data as List).map((p) => NewsPattern(
+        patternType: p['pattern_type'] ?? '',
+        description: p['description'] ?? '',
+        historicalOccurrences: p['historical_occurrences'] ?? 0,
+        avgSubsequentMove: (p['avg_subsequent_move'] as num?)?.toDouble() ?? 0,
+        matchedCurrentNews: List<String>.from(p['matched_current_news'] ?? []),
+        matchConfidence: (p['match_confidence'] as num?)?.toDouble() ?? 0,
+      )).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Speichert Analyse asynchron im globalen Cache
+  Future<void> _saveToCacheAsync(MarketAnalysis analysis) async {
+    try {
+      await _supabaseService.saveCachedAnalysis(
+        symbol: analysis.symbol,
+        assetType: analysis.assetType,
+        direction: analysis.direction.name,
+        confidence: analysis.confidence,
+        probabilitySignificantMove: analysis.probabilitySignificantMove,
+        expectedMovePercent: analysis.expectedMovePercent,
+        timeframeDays: analysis.timeframeDays,
+        keyTriggers: analysis.keyTriggers,
+        historicalPatterns: analysis.historicalPatterns.map((p) => {
+          'pattern': p.pattern,
+          'occurred_before': p.occurredBefore.toIso8601String(),
+          'resulted_in': p.resultedIn,
+          'relevance_score': p.relevanceScore,
+        }).toList(),
+        newsCorrelations: analysis.newsCorrelations.map((n) => {
+          'news_event': n.newsEvent,
+          'price_impact': n.priceImpact,
+          'delay_days': n.delayDays,
+        }).toList(),
+        newsPatterns: analysis.newsPatterns.map((p) => {
+          'pattern_type': p.patternType,
+          'description': p.description,
+          'historical_occurrences': p.historicalOccurrences,
+          'avg_subsequent_move': p.avgSubsequentMove,
+          'matched_current_news': p.matchedCurrentNews,
+          'match_confidence': p.matchConfidence,
+        }).toList(),
+        riskFactors: analysis.riskFactors,
+        recommendation: analysis.recommendation,
+        summary: analysis.summary,
+        analyzedAt: analysis.analyzedAt,
+      );
+    } catch (e) {
+      debugPrint('Error saving to cache: $e');
+    }
   }
 
   Future<void> enableAlert(MarketAnalysis analysis) async {
