@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_profile.dart';
 import '../models/stock.dart';
@@ -332,17 +333,22 @@ class SupabaseService {
 
   /// Get cached analysis for a symbol (if < 1 hour old)
   Future<Map<String, dynamic>?> getCachedAnalysis(String symbol) async {
+    debugPrint('🔍 getCachedAnalysis called for: $symbol');
     try {
       final response = await _client.rpc('get_cached_analysis', params: {
         'p_symbol': symbol.toUpperCase(),
       });
+      debugPrint('🔍 getCachedAnalysis response: $response');
 
       final result = Map<String, dynamic>.from(response as Map);
       if (result['found'] == true) {
+        debugPrint('📦 Cache HIT for $symbol');
         return result;
       }
+      debugPrint('📭 Cache MISS for $symbol');
       return null;
     } catch (e) {
+      debugPrint('❌ getCachedAnalysis error: $e');
       return null;
     }
   }
@@ -365,6 +371,7 @@ class SupabaseService {
     required String summary,
     required DateTime analyzedAt,
   }) async {
+    debugPrint('💾 saveCachedAnalysis called for: $symbol');
     try {
       final response = await _client.rpc('save_cached_analysis', params: {
         'p_symbol': symbol.toUpperCase(),
@@ -385,8 +392,10 @@ class SupabaseService {
       });
 
       final result = Map<String, dynamic>.from(response as Map);
+      debugPrint('💾 saveCachedAnalysis result: $result');
       return result['success'] == true;
     } catch (e) {
+      debugPrint('❌ saveCachedAnalysis error: $e');
       return false;
     }
   }
