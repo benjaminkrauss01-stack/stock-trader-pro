@@ -14,14 +14,12 @@ class AnalysisScreen extends StatefulWidget {
 
 class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final TextEditingController _symbolController = TextEditingController();
-  String _selectedAssetType = 'Stock';
   String? _expandedSymbol; // Welches Symbol ist gerade ausgeklappt
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AnalysisProvider>().initialize();
     });
@@ -30,23 +28,19 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
   @override
   void dispose() {
     _tabController.dispose();
-    _symbolController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Check for pending symbol from other screens
+    // Check for pending symbol from other screens - auto-start analysis
     final provider = context.watch<AnalysisProvider>();
     if (provider.pendingSymbol != null) {
+      final symbol = provider.pendingSymbol!;
+      final assetType = provider.pendingAssetType ?? 'Stock';
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _symbolController.text = provider.pendingSymbol!;
-        if (provider.pendingAssetType != null) {
-          setState(() {
-            _selectedAssetType = provider.pendingAssetType!;
-          });
-        }
         provider.clearPendingSymbol();
+        provider.analyzeAsset(symbol: symbol, assetType: assetType);
       });
     }
 
@@ -68,7 +62,6 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
           unselectedLabelColor: AppColors.textSecondary,
           tabs: const [
             Tab(text: 'Analyse'),
-            Tab(text: 'Gespeichert'),
             Tab(text: 'Alerts'),
           ],
         ),
@@ -77,7 +70,6 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
         controller: _tabController,
         children: [
           _buildAnalyzeTab(),
-          _buildSavedTab(),
           _buildAlertsTab(),
         ],
       ),
@@ -95,7 +87,6 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
               // Limit Warning Banner
               if (provider.remainingAnalyses >= 0 && provider.remainingAnalyses < 2)
                 _buildLimitWarningBanner(provider),
-              _buildSearchCard(provider),
               if (provider.isAnalyzing) ...[
                 const SizedBox(height: 24),
                 _buildLoadingCard(),
@@ -137,103 +128,6 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
           ),
         );
       },
-    );
-  }
-
-  Widget _buildSearchCard(AnalysisProvider provider) {
-    return Card(
-      color: AppColors.card,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Asset analysieren',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'GPT-4 analysiert Preisbewegungen, News und historische Muster',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    controller: _symbolController,
-                    style: const TextStyle(color: AppColors.textPrimary),
-                    decoration: InputDecoration(
-                      hintText: 'Symbol (z.B. AAPL, BTC-USD)',
-                      hintStyle: const TextStyle(color: AppColors.textHint),
-                      prefixIcon: const Icon(Icons.search, color: AppColors.textHint),
-                      filled: true,
-                      fillColor: AppColors.cardLight,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    textCapitalization: TextCapitalization.characters,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardLight,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedAssetType,
-                        dropdownColor: AppColors.card,
-                        style: const TextStyle(color: AppColors.textPrimary),
-                        items: ['Stock', 'ETF', 'Crypto'].map((type) {
-                          return DropdownMenuItem(value: type, child: Text(type));
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(() => _selectedAssetType = value!);
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: provider.isAnalyzing
-                    ? null
-                    : () {
-                        if (_symbolController.text.isNotEmpty) {
-                          provider.analyzeAsset(
-                            symbol: _symbolController.text.toUpperCase(),
-                            assetType: _selectedAssetType,
-                          );
-                        }
-                      },
-                icon: const Icon(Icons.auto_awesome),
-                label: Text(provider.isAnalyzing ? 'Analysiere...' : 'KI-Analyse starten'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -679,7 +573,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Führe oben eine KI-Analyse durch um deine Historie zu starten',
+                    'Klicke auf das KI-Symbol bei einem Asset um eine Analyse zu starten',
                     style: TextStyle(
                       color: AppColors.textHint,
                       fontSize: 12,
@@ -1067,167 +961,6 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
     } else {
       return Colors.grey;
     }
-  }
-
-  Widget _buildSavedTab() {
-    return Consumer<AnalysisProvider>(
-      builder: (context, provider, _) {
-        if (provider.savedAnalyses.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.folder_open, size: 64, color: AppColors.textHint),
-                SizedBox(height: 16),
-                Text(
-                  'Keine gespeicherten Analysen',
-                  style: TextStyle(color: AppColors.textSecondary),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: provider.savedAnalyses.length,
-          itemBuilder: (context, index) {
-            final analysis = provider.savedAnalyses[index];
-            return _buildSavedAnalysisCard(analysis, provider);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildSavedAnalysisCard(MarketAnalysis analysis, AnalysisProvider provider) {
-    final directionColor = analysis.direction == AnalysisDirection.bullish
-        ? AppColors.profit
-        : analysis.direction == AnalysisDirection.bearish
-            ? AppColors.loss
-            : AppColors.neutral;
-
-    return Card(
-      color: AppColors.card,
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: () async {
-          // Load chart data for this symbol
-          await provider.loadChartData(analysis.symbol, '3M');
-          if (!mounted) return;
-
-          // Show full analysis with chart
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: AppColors.background,
-            builder: (_) => DraggableScrollableSheet(
-              initialChildSize: 0.9,
-              minChildSize: 0.5,
-              maxChildSize: 0.95,
-              expand: false,
-              builder: (_, controller) => Consumer<AnalysisProvider>(
-                builder: (context, prov, _) => SingleChildScrollView(
-                  controller: controller,
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      // Chart with historical predictions
-                      if (prov.currentChartData.isNotEmpty)
-                        Card(
-                          color: AppColors.card,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            child: AnalysisChartWidget(
-                              candles: prov.currentChartData,
-                              currentAnalysis: analysis,
-                              historicalAnalyses: prov.getHistoricalAnalysesForSymbol(
-                                analysis.symbol,
-                              ).where((a) => a.analyzedAt != analysis.analyzedAt).toList(),
-                              selectedRange: prov.currentChartRange,
-                              onRangeChanged: (range) {
-                                prov.loadChartData(analysis.symbol, range);
-                              },
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 16),
-                      _buildAnalysisResult(analysis),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: directionColor.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  analysis.directionEmoji,
-                  style: TextStyle(fontSize: 20, color: directionColor),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          analysis.symbol,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: directionColor,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            analysis.directionText,
-                            style: const TextStyle(color: Colors.white, fontSize: 10),
-                          ),
-                        ),
-                        if (analysis.alertEnabled) ...[
-                          const SizedBox(width: 4),
-                          const Icon(Icons.notifications_active, color: Colors.orange, size: 16),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${analysis.confidence.toStringAsFixed(0)}% Konfidenz | ${analysis.expectedMovePercent >= 0 ? '+' : ''}${analysis.expectedMovePercent.toStringAsFixed(1)}% erwartet',
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, color: AppColors.textHint),
-                onPressed: () {
-                  provider.deleteAnalysis(analysis.symbol);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildAlertsTab() {
