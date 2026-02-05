@@ -116,6 +116,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     final symbol = result['symbol'] ?? '';
                     final name = result['name'] ?? '';
                     final exchange = result['exchange'] ?? '';
+                    final quoteType = result['type'] ?? 'EQUITY';
                     final isInWatchlist = provider.isInWatchlist(symbol);
 
                     return Card(
@@ -124,13 +125,23 @@ class _SearchScreenState extends State<SearchScreen> {
                       child: ListTile(
                         onTap: () => _navigateToDetail(context, symbol),
                         leading: CircleAvatar(
-                          backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                          child: Text(
-                            symbol.isNotEmpty ? symbol[0] : '?',
-                            style: const TextStyle(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          backgroundColor: quoteType == 'CRYPTOCURRENCY'
+                              ? Colors.orange.withValues(alpha: 0.2)
+                              : quoteType == 'ETF'
+                                  ? Colors.teal.withValues(alpha: 0.2)
+                                  : AppColors.primary.withValues(alpha: 0.2),
+                          child: Icon(
+                            quoteType == 'CRYPTOCURRENCY'
+                                ? Icons.currency_bitcoin
+                                : quoteType == 'ETF'
+                                    ? Icons.account_balance
+                                    : Icons.show_chart,
+                            color: quoteType == 'CRYPTOCURRENCY'
+                                ? Colors.orange
+                                : quoteType == 'ETF'
+                                    ? Colors.teal
+                                    : AppColors.primary,
+                            size: 20,
                           ),
                         ),
                         title: Text(
@@ -152,12 +163,48 @@ class _SearchScreenState extends State<SearchScreen> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            Text(
-                              exchange,
-                              style: const TextStyle(
-                                color: AppColors.textHint,
-                                fontSize: 10,
-                              ),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: quoteType == 'CRYPTOCURRENCY'
+                                        ? Colors.orange.withValues(alpha: 0.2)
+                                        : quoteType == 'ETF'
+                                            ? Colors.teal.withValues(alpha: 0.2)
+                                            : AppColors.primary.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    quoteType == 'CRYPTOCURRENCY'
+                                        ? 'Crypto'
+                                        : quoteType == 'ETF'
+                                            ? 'ETF'
+                                            : quoteType == 'MUTUALFUND'
+                                                ? 'Fonds'
+                                                : quoteType == 'INDEX'
+                                                    ? 'Index'
+                                                    : 'Aktie',
+                                    style: TextStyle(
+                                      color: quoteType == 'CRYPTOCURRENCY'
+                                          ? Colors.orange
+                                          : quoteType == 'ETF'
+                                              ? Colors.teal
+                                              : AppColors.textHint,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  exchange,
+                                  style: const TextStyle(
+                                    color: AppColors.textHint,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -170,7 +217,12 @@ class _SearchScreenState extends State<SearchScreen> {
                             if (isInWatchlist) {
                               provider.removeFromWatchlist(symbol);
                             } else {
-                              provider.addToWatchlist(symbol);
+                              final assetType = quoteType == 'CRYPTOCURRENCY'
+                                  ? 'Crypto'
+                                  : quoteType == 'ETF'
+                                      ? 'ETF'
+                                      : 'Stock';
+                              provider.addToWatchlist(symbol, assetType: assetType);
                             }
                           },
                         ),

@@ -236,8 +236,8 @@ class CORSProxyHandler(SimpleHTTPRequestHandler):
             results = []
             for q in quotes:
                 quote_type = q.get('quoteType', '')
-                # Include stocks, ETFs, indices
-                if quote_type in ['EQUITY', 'ETF', 'INDEX', 'MUTUALFUND']:
+                # Include stocks, ETFs, indices, crypto
+                if quote_type in ['EQUITY', 'ETF', 'INDEX', 'MUTUALFUND', 'CRYPTOCURRENCY']:
                     results.append({
                         'symbol': q.get('symbol', ''),
                         'shortname': q.get('shortname', q.get('symbol', '')),

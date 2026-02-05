@@ -156,7 +156,12 @@ class StockApiService {
         final data = json.decode(response.body);
         final quotes = data['quotes'] as List? ?? [];
         return quotes
-            .where((q) => q['quoteType'] == 'EQUITY' || q['quoteType'] == 'ETF')
+            .where((q) =>
+                q['quoteType'] == 'EQUITY' ||
+                q['quoteType'] == 'ETF' ||
+                q['quoteType'] == 'INDEX' ||
+                q['quoteType'] == 'MUTUALFUND' ||
+                q['quoteType'] == 'CRYPTOCURRENCY')
             .map((q) => {
                   'symbol': q['symbol'],
                   'name': q['shortname'] ?? q['longname'] ?? q['symbol'],
