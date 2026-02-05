@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/etf.dart';
 import '../providers/analysis_provider.dart';
+import '../providers/stock_provider.dart';
 import '../utils/constants.dart';
 import '../utils/formatters.dart';
 import 'dashboard_screen.dart';
@@ -15,19 +16,39 @@ class ETFScreen extends StatefulWidget {
 
 class _ETFScreenState extends State<ETFScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final TextEditingController _searchController = TextEditingController();
   final List<ETF> _etfs = ETF.getPopularETFs();
   final List<Sector> _sectors = Sector.getSectors();
+  List<ETF> _filteredETFs = [];
+  bool _isSearching = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _filteredETFs = _etfs;
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  void _filterETFs(String query) {
+    setState(() {
+      _isSearching = query.isNotEmpty;
+      if (query.isEmpty) {
+        _filteredETFs = _etfs;
+      } else {
+        final q = query.toLowerCase();
+        _filteredETFs = _etfs.where((e) =>
+            e.symbol.toLowerCase().contains(q) ||
+            e.name.toLowerCase().contains(q) ||
+            e.category.toLowerCase().contains(q)).toList();
+      }
+    });
   }
 
   @override
@@ -62,17 +83,63 @@ class _ETFScreenState extends State<ETFScreen> with SingleTickerProviderStateMix
   }
 
   Widget _buildETFList() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _etfs.length,
-      itemBuilder: (context, index) {
-        final etf = _etfs[index];
-        return _ETFCard(
-          etf: etf,
-          onTap: () => _showETFDetail(etf),
-          onAnalyze: () => _navigateToAnalysis(context, etf.symbol),
-        );
-      },
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: TextField(
+            controller: _searchController,
+            style: const TextStyle(color: AppColors.textPrimary),
+            decoration: InputDecoration(
+              hintText: 'ETF suchen...',
+              hintStyle: const TextStyle(color: AppColors.textHint),
+              prefixIcon: const Icon(Icons.search, color: AppColors.textHint),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, color: AppColors.textHint),
+                      onPressed: () {
+                        _searchController.clear();
+                        _filterETFs('');
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: AppColors.card,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            onChanged: _filterETFs,
+          ),
+        ),
+        if (_isSearching)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '${_filteredETFs.length} Ergebnisse',
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ),
+          ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: _filteredETFs.length,
+            itemBuilder: (context, index) {
+              final etf = _filteredETFs[index];
+              return _ETFCard(
+                etf: etf,
+                onTap: () => _showETFDetail(etf),
+                onAnalyze: () => _navigateToAnalysis(context, etf.symbol),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -157,122 +224,145 @@ class _ETFCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final changeColor = etf.isPositive ? AppColors.profit : AppColors.loss;
 
-    return Card(
-      color: AppColors.card,
-      margin: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    return Consumer<StockProvider>(
+      builder: (context, stockProvider, _) {
+        final isInWatchlist = stockProvider.isInWatchlist(etf.symbol);
+
+        return Card(
+          color: AppColors.card,
+          margin: const EdgeInsets.only(bottom: 8),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              etf.symbol,
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                etf.category,
-                                style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontSize: 10,
+                            Row(
+                              children: [
+                                Text(
+                                  etf.symbol,
+                                  style: const TextStyle(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    etf.category,
+                                    style: const TextStyle(
+                                      color: AppColors.primary,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              etf.name,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          etf.name,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            Formatters.formatCurrency(etf.price),
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: changeColor.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              Formatters.formatChange(etf.change, etf.changePercent),
+                              style: TextStyle(
+                                color: changeColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Watchlist star
+                      IconButton(
+                        onPressed: () {
+                          if (isInWatchlist) {
+                            stockProvider.removeFromWatchlist(etf.symbol);
+                          } else {
+                            stockProvider.addToWatchlist(etf.symbol, assetType: 'ETF');
+                          }
+                        },
+                        icon: Icon(
+                          isInWatchlist ? Icons.star : Icons.star_border,
+                          color: isInWatchlist ? Colors.amber : AppColors.textHint,
+                          size: 22,
+                        ),
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        padding: EdgeInsets.zero,
+                        tooltip: isInWatchlist ? 'Aus Watchlist entfernen' : 'Zur Watchlist',
+                      ),
+                      if (onAnalyze != null) ...[
+                        IconButton(
+                          onPressed: onAnalyze,
+                          icon: const Icon(
+                            Icons.psychology,
+                            color: Colors.deepPurple,
+                            size: 24,
+                          ),
+                          tooltip: 'KI-Analyse',
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.deepPurple.withValues(alpha: 0.15),
+                          ),
                         ),
                       ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        Formatters.formatCurrency(etf.price),
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: changeColor.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          Formatters.formatChange(etf.change, etf.changePercent),
-                          style: TextStyle(
-                            color: changeColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
                     ],
                   ),
-                  if (onAnalyze != null) ...[
-                    const SizedBox(width: 8),
-                    IconButton(
-                      onPressed: onAnalyze,
-                      icon: const Icon(
-                        Icons.psychology,
-                        color: Colors.deepPurple,
-                        size: 24,
-                      ),
-                      tooltip: 'KI-Analyse',
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.deepPurple.withValues(alpha: 0.15),
-                      ),
-                    ),
-                  ],
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildInfoChip('AUM', Formatters.formatMarketCap(etf.aum)),
+                      _buildInfoChip('Exp. Ratio', '${etf.expenseRatio.toStringAsFixed(2)}%'),
+                      _buildInfoChip('YTD', Formatters.formatPercent(etf.ytdReturn)),
+                    ],
+                  ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildInfoChip('AUM', Formatters.formatMarketCap(etf.aum)),
-                  _buildInfoChip('Exp. Ratio', '${etf.expenseRatio.toStringAsFixed(2)}%'),
-                  _buildInfoChip('YTD', Formatters.formatPercent(etf.ytdReturn)),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

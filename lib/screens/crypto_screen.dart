@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import '../providers/analysis_provider.dart';
+import '../providers/stock_provider.dart';
 import '../services/crypto_service.dart';
 import '../utils/constants.dart';
 import '../utils/formatters.dart';
@@ -16,15 +17,24 @@ class CryptoScreen extends StatefulWidget {
 
 class _CryptoScreenState extends State<CryptoScreen> {
   final CryptoService _cryptoService = CryptoService();
+  final TextEditingController _searchController = TextEditingController();
   List<Cryptocurrency> _cryptos = [];
+  List<Cryptocurrency> _filteredCryptos = [];
   List<TrendingCrypto> _trending = [];
   Map<String, dynamic> _globalData = {};
   bool _isLoading = true;
+  bool _isSearching = false;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -38,9 +48,24 @@ class _CryptoScreenState extends State<CryptoScreen> {
 
     setState(() {
       _cryptos = results[0] as List<Cryptocurrency>;
+      _filteredCryptos = _cryptos;
       _trending = results[1] as List<TrendingCrypto>;
       _globalData = results[2] as Map<String, dynamic>;
       _isLoading = false;
+    });
+  }
+
+  void _filterCryptos(String query) {
+    setState(() {
+      _isSearching = query.isNotEmpty;
+      if (query.isEmpty) {
+        _filteredCryptos = _cryptos;
+      } else {
+        final q = query.toLowerCase();
+        _filteredCryptos = _cryptos.where((c) =>
+            c.symbol.toLowerCase().contains(q) ||
+            c.name.toLowerCase().contains(q)).toList();
+      }
     });
   }
 
@@ -68,14 +93,50 @@ class _CryptoScreenState extends State<CryptoScreen> {
               color: AppColors.primary,
               child: CustomScrollView(
                 slivers: [
-                  SliverToBoxAdapter(child: _buildGlobalStats()),
-                  SliverToBoxAdapter(child: _buildTrendingSection()),
-                  const SliverToBoxAdapter(
+                  // Search bar
+                  SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: TextField(
+                        controller: _searchController,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        decoration: InputDecoration(
+                          hintText: 'Crypto suchen...',
+                          hintStyle: const TextStyle(color: AppColors.textHint),
+                          prefixIcon: const Icon(Icons.search, color: AppColors.textHint),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, color: AppColors.textHint),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    _filterCryptos('');
+                                  },
+                                )
+                              : null,
+                          filled: true,
+                          fillColor: AppColors.card,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onChanged: _filterCryptos,
+                      ),
+                    ),
+                  ),
+                  if (!_isSearching) ...[
+                    SliverToBoxAdapter(child: _buildGlobalStats()),
+                    SliverToBoxAdapter(child: _buildTrendingSection()),
+                  ],
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
                       child: Text(
-                        'Top Cryptocurrencies',
-                        style: TextStyle(
+                        _isSearching
+                            ? '${_filteredCryptos.length} Ergebnisse'
+                            : 'Top Cryptocurrencies',
+                        style: const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -86,11 +147,11 @@ class _CryptoScreenState extends State<CryptoScreen> {
                   SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) => _CryptoCard(
-                        crypto: _cryptos[index],
-                        onTap: () => _showCryptoDetail(_cryptos[index]),
-                        onAnalyze: () => _navigateToAnalysis(context, _cryptos[index].symbol),
+                        crypto: _filteredCryptos[index],
+                        onTap: () => _showCryptoDetail(_filteredCryptos[index]),
+                        onAnalyze: () => _navigateToAnalysis(context, _filteredCryptos[index].symbol),
                       ),
-                      childCount: _cryptos.length,
+                      childCount: _filteredCryptos.length,
                     ),
                   ),
                   const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -292,155 +353,180 @@ class _CryptoCard extends StatelessWidget {
 
   const _CryptoCard({required this.crypto, required this.onTap, this.onAnalyze});
 
+  String get _watchlistSymbol => '${crypto.symbol.toUpperCase()}-USD';
+
   @override
   Widget build(BuildContext context) {
     final changeColor = crypto.isPositive24h ? AppColors.profit : AppColors.loss;
 
-    return Card(
-      color: AppColors.card,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              // Rank
-              SizedBox(
-                width: 28,
-                child: Text(
-                  '${crypto.marketCapRank}',
-                  style: const TextStyle(
-                    color: AppColors.textHint,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              // Icon & Name
-              if (crypto.image != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Image.network(
-                    crypto.image!,
-                    width: 32,
-                    height: 32,
-                    errorBuilder: (_, _, _) => Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: AppColors.cardLight,
-                        borderRadius: BorderRadius.circular(16),
+    return Consumer<StockProvider>(
+      builder: (context, stockProvider, _) {
+        final isInWatchlist = stockProvider.isInWatchlist(_watchlistSymbol);
+
+        return Card(
+          color: AppColors.card,
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  // Rank
+                  SizedBox(
+                    width: 28,
+                    child: Text(
+                      '${crypto.marketCapRank}',
+                      style: const TextStyle(
+                        color: AppColors.textHint,
+                        fontSize: 12,
                       ),
-                      child: const Icon(Icons.currency_bitcoin, size: 20, color: Colors.orange),
                     ),
                   ),
-                ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      crypto.symbol,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                  // Icon & Name
+                  if (crypto.image != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.network(
+                        crypto.image!,
+                        width: 32,
+                        height: 32,
+                        errorBuilder: (_, _, _) => Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.cardLight,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Icon(Icons.currency_bitcoin, size: 20, color: Colors.orange),
+                        ),
                       ),
                     ),
-                    Text(
-                      crypto.name,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 11,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              // Sparkline
-              if (crypto.sparkline.isNotEmpty)
-                SizedBox(
-                  width: 60,
-                  height: 30,
-                  child: LineChart(
-                    LineChartData(
-                      gridData: const FlGridData(show: false),
-                      titlesData: const FlTitlesData(show: false),
-                      borderData: FlBorderData(show: false),
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: crypto.sparkline
-                              .asMap()
-                              .entries
-                              .map((e) => FlSpot(e.key.toDouble(), e.value))
-                              .toList(),
-                          isCurved: true,
-                          color: changeColor,
-                          barWidth: 1.5,
-                          dotData: const FlDotData(show: false),
-                          belowBarData: BarAreaData(show: false),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          crypto.symbol,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          crypto.name,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 11,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                ),
-              const SizedBox(width: 12),
-              // Price
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      _formatPrice(crypto.price),
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: changeColor.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        Formatters.formatPercent(crypto.change24h),
-                        style: TextStyle(
-                          color: changeColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
+                  // Sparkline
+                  if (crypto.sparkline.isNotEmpty)
+                    SizedBox(
+                      width: 60,
+                      height: 30,
+                      child: LineChart(
+                        LineChartData(
+                          gridData: const FlGridData(show: false),
+                          titlesData: const FlTitlesData(show: false),
+                          borderData: FlBorderData(show: false),
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: crypto.sparkline
+                                  .asMap()
+                                  .entries
+                                  .map((e) => FlSpot(e.key.toDouble(), e.value))
+                                  .toList(),
+                              isCurved: true,
+                              color: changeColor,
+                              barWidth: 1.5,
+                              dotData: const FlDotData(show: false),
+                              belowBarData: BarAreaData(show: false),
+                            ),
+                          ],
                         ),
                       ),
                     ),
+                  const SizedBox(width: 12),
+                  // Price
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          _formatPrice(crypto.price),
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: changeColor.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            Formatters.formatPercent(crypto.change24h),
+                            style: TextStyle(
+                              color: changeColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Watchlist star
+                  IconButton(
+                    onPressed: () {
+                      if (isInWatchlist) {
+                        stockProvider.removeFromWatchlist(_watchlistSymbol);
+                      } else {
+                        stockProvider.addToWatchlist(_watchlistSymbol, assetType: 'Crypto');
+                      }
+                    },
+                    icon: Icon(
+                      isInWatchlist ? Icons.star : Icons.star_border,
+                      color: isInWatchlist ? Colors.amber : AppColors.textHint,
+                      size: 22,
+                    ),
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    padding: EdgeInsets.zero,
+                    tooltip: isInWatchlist ? 'Aus Watchlist entfernen' : 'Zur Watchlist',
+                  ),
+                  if (onAnalyze != null) ...[
+                    IconButton(
+                      onPressed: onAnalyze,
+                      icon: const Icon(
+                        Icons.psychology,
+                        color: Colors.deepPurple,
+                        size: 24,
+                      ),
+                      tooltip: 'KI-Analyse',
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.deepPurple.withValues(alpha: 0.15),
+                      ),
+                    ),
                   ],
-                ),
+                ],
               ),
-              if (onAnalyze != null) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: onAnalyze,
-                  icon: const Icon(
-                    Icons.psychology,
-                    color: Colors.deepPurple,
-                    size: 24,
-                  ),
-                  tooltip: 'KI-Analyse',
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.deepPurple.withValues(alpha: 0.15),
-                  ),
-                ),
-              ],
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
