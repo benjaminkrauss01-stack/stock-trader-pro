@@ -93,7 +93,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Limit Warning Banner
-              if (provider.remainingAnalyses < 2 && provider.subscriptionTier != 'ultimate')
+              if (provider.remainingAnalyses >= 0 && provider.remainingAnalyses < 2)
                 _buildLimitWarningBanner(provider),
               _buildSearchCard(provider),
               if (provider.isAnalyzing) ...[
