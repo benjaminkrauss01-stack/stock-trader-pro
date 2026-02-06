@@ -139,15 +139,25 @@ class AIAnalysisService {
     try {
       final data = jsonDecode(response);
 
+      final direction = _parseDirection(data['direction']);
+      var movePercent = (data['expected_move_percent'] ?? 0).toDouble();
+
+      // Vorzeichen-Korrektur: bearish muss negativ sein, bullish positiv
+      if (direction == AnalysisDirection.bearish && movePercent > 0) {
+        movePercent = -movePercent;
+      } else if (direction == AnalysisDirection.bullish && movePercent < 0) {
+        movePercent = movePercent.abs();
+      }
+
       return MarketAnalysis(
         symbol: symbol,
         assetType: assetType,
         analyzedAt: DateTime.now(),
-        direction: _parseDirection(data['direction']),
+        direction: direction,
         confidence: (data['confidence'] ?? 50).toDouble(),
         probabilitySignificantMove:
             (data['probability_significant_move'] ?? 0).toDouble(),
-        expectedMovePercent: (data['expected_move_percent'] ?? 0).toDouble(),
+        expectedMovePercent: movePercent,
         timeframeDays: data['timeframe_days'] ?? 7,
         keyTriggers: List<String>.from(data['key_triggers'] ?? []),
         historicalPatterns: (data['historical_patterns'] as List?)
