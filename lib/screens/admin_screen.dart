@@ -18,6 +18,15 @@ class _AdminScreenState extends State<AdminScreen> {
   bool _isLoading = true;
   String? _error;
 
+  // Pagination
+  int _currentPage = 0;
+  static const int _usersPerPage = 20;
+
+  // Expandable user analyses
+  String? _expandedUserId;
+  final Map<String, List<dynamic>> _userAnalyses = {};
+  final Set<String> _loadingAnalyses = {};
+
   // AI Prompt state
   String? _originalPrompt;
   bool _isPromptLoading = false;
@@ -322,6 +331,37 @@ class _AdminScreenState extends State<AdminScreen> {
         _showSnackBar(response['error'] ?? 'Fehler', isError: true);
       }
     }
+  }
+
+  Future<void> _loadUserAnalyses(String userId) async {
+    if (_loadingAnalyses.contains(userId)) return;
+
+    setState(() => _loadingAnalyses.add(userId));
+    try {
+      final response = await _supabaseService.adminGetUserAnalyses(userId);
+      if (response['success'] == true) {
+        setState(() {
+          _userAnalyses[userId] = response['analyses'] as List<dynamic>? ?? [];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading user analyses: $e');
+    } finally {
+      setState(() => _loadingAnalyses.remove(userId));
+    }
+  }
+
+  void _toggleUserExpanded(String userId) {
+    setState(() {
+      if (_expandedUserId == userId) {
+        _expandedUserId = null;
+      } else {
+        _expandedUserId = userId;
+        if (!_userAnalyses.containsKey(userId)) {
+          _loadUserAnalyses(userId);
+        }
+      }
+    });
   }
 
   void _showSnackBar(String message, {required bool isError}) {
@@ -631,6 +671,11 @@ class _AdminScreenState extends State<AdminScreen> {
       );
     }
 
+    final totalPages = (users.length / _usersPerPage).ceil();
+    final startIndex = _currentPage * _usersPerPage;
+    final endIndex = (startIndex + _usersPerPage).clamp(0, users.length);
+    final pageUsers = users.sublist(startIndex, endIndex);
+
     return Card(
       color: AppColors.card,
       child: Padding(
@@ -662,7 +707,70 @@ class _AdminScreenState extends State<AdminScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            ...users.map((user) => _buildUserTile(user as Map<String, dynamic>)),
+            ...pageUsers.map((user) => _buildUserTile(user as Map<String, dynamic>)),
+            // Pagination
+            if (totalPages > 1) ...[
+              const SizedBox(height: 16),
+              const Divider(color: AppColors.cardLight),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    onPressed: _currentPage > 0
+                        ? () => setState(() => _currentPage--)
+                        : null,
+                    icon: const Icon(Icons.chevron_left),
+                    color: AppColors.primary,
+                    disabledColor: AppColors.textHint,
+                  ),
+                  const SizedBox(width: 8),
+                  ...List.generate(totalPages, (index) {
+                    final isActive = index == _currentPage;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: InkWell(
+                        onTap: () => setState(() => _currentPage = index),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: isActive ? AppColors.primary : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              color: isActive ? Colors.white : AppColors.textSecondary,
+                              fontSize: 13,
+                              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: _currentPage < totalPages - 1
+                        ? () => setState(() => _currentPage++)
+                        : null,
+                    icon: const Icon(Icons.chevron_right),
+                    color: AppColors.primary,
+                    disabledColor: AppColors.textHint,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Center(
+                child: Text(
+                  '${startIndex + 1}-$endIndex von ${users.length}',
+                  style: const TextStyle(color: AppColors.textHint, fontSize: 11),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -676,10 +784,12 @@ class _AdminScreenState extends State<AdminScreen> {
     final analysesUsed = user['ai_analyses_used'] as int? ?? 0;
     final userId = user['id'] as String;
     final isActive = user['is_active'] as bool? ?? true;
+    final isExpanded = _expandedUserId == userId;
+    final analyses = _userAnalyses[userId];
+    final isLoadingAnalyses = _loadingAnalyses.contains(userId);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isActive ? AppColors.cardLight : AppColors.cardLight.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8),
@@ -688,141 +798,309 @@ class _AdminScreenState extends State<AdminScreen> {
               ? AppColors.loss.withValues(alpha: 0.5)
               : tier == 'admin'
                   ? Colors.purple.withValues(alpha: 0.5)
-                  : Colors.transparent,
+                  : isExpanded
+                      ? AppColors.primary.withValues(alpha: 0.5)
+                      : Colors.transparent,
           width: 1,
         ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: _getTierColor(tier).withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(_getTierIcon(tier), color: _getTierColor(tier), size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // User header row
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
               children: [
-                Text(
-                  displayName ?? email.split('@').first,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: _getTierColor(tier).withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
                   ),
+                  child: Icon(_getTierIcon(tier), color: _getTierColor(tier), size: 20),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  email,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _getTierColor(tier).withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        _getTierDisplayName(tier),
-                        style: TextStyle(color: _getTierColor(tier), fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '$analysesUsed Analysen',
-                      style: const TextStyle(color: AppColors.textHint, fontSize: 11),
-                    ),
-                    if (!isActive) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.loss.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(4),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName ?? email.split('@').first,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
                         ),
-                        child: const Text(
-                          'INAKTIV',
-                          style: TextStyle(color: AppColors.loss, fontSize: 9, fontWeight: FontWeight.bold),
-                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        email,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _getTierColor(tier).withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              _getTierDisplayName(tier),
+                              style: TextStyle(color: _getTierColor(tier), fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$analysesUsed Analysen',
+                            style: const TextStyle(color: AppColors.textHint, fontSize: 11),
+                          ),
+                          if (!isActive) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.loss.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'INAKTIV',
+                                style: TextStyle(color: AppColors.loss, fontSize: 9, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
+                  ),
+                ),
+                // Expand analyses button
+                IconButton(
+                  onPressed: () => _toggleUserExpanded(userId),
+                  icon: Icon(
+                    isExpanded ? Icons.expand_less : Icons.analytics_outlined,
+                    color: isExpanded ? AppColors.primary : AppColors.textSecondary,
+                    size: 22,
+                  ),
+                  tooltip: 'Analysen anzeigen',
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  padding: EdgeInsets.zero,
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
+                  color: AppColors.card,
+                  onSelected: (action) {
+                    if (action == 'tier') {
+                      _changeUserTier(userId, tier);
+                    } else if (action == 'reset') {
+                      _resetUserAnalyses(userId, email);
+                    } else if (action == 'toggle_active') {
+                      _toggleUserActive(userId, email, isActive);
+                    } else if (action == 'delete') {
+                      _deleteUser(userId, email);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'tier',
+                      child: Row(
+                        children: [
+                          Icon(Icons.swap_horiz, color: AppColors.textPrimary, size: 20),
+                          SizedBox(width: 8),
+                          Text('Tier aendern', style: TextStyle(color: AppColors.textPrimary)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'reset',
+                      child: Row(
+                        children: [
+                          Icon(Icons.refresh, color: AppColors.textPrimary, size: 20),
+                          SizedBox(width: 8),
+                          Text('Analysen zuruecksetzen', style: TextStyle(color: AppColors.textPrimary)),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'toggle_active',
+                      child: Row(
+                        children: [
+                          Icon(
+                            isActive ? Icons.block : Icons.check_circle,
+                            color: isActive ? Colors.orange : AppColors.profit,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            isActive ? 'Deaktivieren' : 'Aktivieren',
+                            style: TextStyle(color: isActive ? Colors.orange : AppColors.profit),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_forever, color: AppColors.loss, size: 20),
+                          SizedBox(width: 8),
+                          Text('Loeschen', style: TextStyle(color: AppColors.loss)),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
-            color: AppColors.card,
-            onSelected: (action) {
-              if (action == 'tier') {
-                _changeUserTier(userId, tier);
-              } else if (action == 'reset') {
-                _resetUserAnalyses(userId, email);
-              } else if (action == 'toggle_active') {
-                _toggleUserActive(userId, email, isActive);
-              } else if (action == 'delete') {
-                _deleteUser(userId, email);
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'tier',
-                child: Row(
-                  children: [
-                    Icon(Icons.swap_horiz, color: AppColors.textPrimary, size: 20),
-                    SizedBox(width: 8),
-                    Text('Tier aendern', style: TextStyle(color: AppColors.textPrimary)),
-                  ],
+          // Expandable analyses section
+          if (isExpanded) ...[
+            const Divider(color: AppColors.cardLight, height: 1),
+            if (isLoadingAnalyses)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                  ),
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'reset',
-                child: Row(
-                  children: [
-                    Icon(Icons.refresh, color: AppColors.textPrimary, size: 20),
-                    SizedBox(width: 8),
-                    Text('Analysen zuruecksetzen', style: TextStyle(color: AppColors.textPrimary)),
-                  ],
+              )
+            else if (analyses == null || analyses.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(
+                  child: Text(
+                    'Keine Analysen vorhanden',
+                    style: TextStyle(color: AppColors.textHint, fontSize: 12),
+                  ),
                 ),
-              ),
-              PopupMenuItem(
-                value: 'toggle_active',
-                child: Row(
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      isActive ? Icons.block : Icons.check_circle,
-                      color: isActive ? Colors.orange : AppColors.profit,
-                      size: 20,
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        '${analyses.length} Analysen',
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      isActive ? 'Deaktivieren' : 'Aktivieren',
-                      style: TextStyle(color: isActive ? Colors.orange : AppColors.profit),
-                    ),
+                    ...analyses.map((a) {
+                      final analysis = a as Map<String, dynamic>;
+                      return _buildAnalysisRow(analysis);
+                    }),
                   ],
                 ),
               ),
-              const PopupMenuItem(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_forever, color: AppColors.loss, size: 20),
-                    SizedBox(width: 8),
-                    Text('Loeschen', style: TextStyle(color: AppColors.loss)),
-                  ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnalysisRow(Map<String, dynamic> analysis) {
+    final symbol = analysis['symbol'] as String? ?? '';
+    final direction = analysis['direction'] as String? ?? 'neutral';
+    final confidence = (analysis['confidence'] as num?)?.toDouble() ?? 0;
+    final expectedMove = (analysis['expected_move_percent'] as num?)?.toDouble() ?? 0;
+    final analyzedAt = DateTime.tryParse(analysis['analyzed_at'] as String? ?? '');
+    final summary = analysis['summary'] as String? ?? '';
+    final assetType = analysis['asset_type'] as String? ?? '';
+
+    final directionColor = direction == 'bullish'
+        ? AppColors.profit
+        : direction == 'bearish'
+            ? AppColors.loss
+            : AppColors.neutral;
+
+    final directionIcon = direction == 'bullish'
+        ? Icons.trending_up
+        : direction == 'bearish'
+            ? Icons.trending_down
+            : Icons.trending_flat;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(directionIcon, color: directionColor, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                symbol,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: directionColor.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: Text(
+                  direction.toUpperCase(),
+                  style: TextStyle(color: directionColor, fontSize: 9, fontWeight: FontWeight.bold),
+                ),
+              ),
+              if (assetType.isNotEmpty) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Text(
+                    assetType,
+                    style: const TextStyle(color: AppColors.primary, fontSize: 9),
+                  ),
+                ),
+              ],
+              const Spacer(),
+              Text(
+                '${confidence.toStringAsFixed(0)}%',
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${expectedMove >= 0 ? '+' : ''}${expectedMove.toStringAsFixed(1)}%',
+                style: TextStyle(color: directionColor, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 8),
+              if (analyzedAt != null)
+                Text(
+                  '${analyzedAt.day}.${analyzedAt.month}.${analyzedAt.year.toString().substring(2)}',
+                  style: const TextStyle(color: AppColors.textHint, fontSize: 10),
+                ),
             ],
           ),
+          if (summary.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              summary,
+              style: const TextStyle(color: AppColors.textHint, fontSize: 10),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ],
       ),
     );

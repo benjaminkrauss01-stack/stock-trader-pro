@@ -303,6 +303,20 @@ class SupabaseService {
     return Map<String, dynamic>.from(response as Map);
   }
 
+  /// Get analyses for a specific user (admin only)
+  Future<Map<String, dynamic>> adminGetUserAnalyses(String targetUserId) async {
+    if (userId == null) {
+      return {'success': false, 'error': 'Nicht eingeloggt'};
+    }
+
+    final response = await _client.rpc('admin_get_user_analyses', params: {
+      'p_admin_id': userId,
+      'p_target_user_id': targetUserId,
+    });
+
+    return Map<String, dynamic>.from(response as Map);
+  }
+
   // ========== AI PROMPT OPERATIONS ==========
 
   /// Get AI analysis prompt from database
