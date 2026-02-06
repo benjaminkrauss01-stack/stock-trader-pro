@@ -93,7 +93,20 @@ class AnalysisProvider extends ChangeNotifier {
   }
 
   Future<void> loadSavedData() async {
-    _savedAnalyses = await _alertService.getSavedAnalyses();
+    // Lade Analysen primär von Supabase (geräteübergreifend)
+    try {
+      final supabaseAnalyses = await _supabaseService.getSavedAnalyses();
+      if (supabaseAnalyses.isNotEmpty) {
+        _savedAnalyses = supabaseAnalyses;
+      } else {
+        // Fallback: lokale Daten wenn Supabase leer
+        _savedAnalyses = await _alertService.getSavedAnalyses();
+      }
+    } catch (e) {
+      // Fallback bei Netzwerkfehler: lokale Daten
+      debugPrint('Supabase load failed, using local: $e');
+      _savedAnalyses = await _alertService.getSavedAnalyses();
+    }
     _activeAlerts = await _alertService.getActiveAlerts();
     _statistics = await _alertService.getStatistics();
     notifyListeners();

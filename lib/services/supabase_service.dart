@@ -185,7 +185,7 @@ class SupabaseService {
   Future<void> saveAnalysis(MarketAnalysis analysis) async {
     if (userId == null) return;
 
-    await _client.from('saved_analyses').insert({
+    await _client.from('saved_analyses').upsert({
       'user_id': userId,
       'symbol': analysis.symbol,
       'asset_type': analysis.assetType,
@@ -197,7 +197,7 @@ class SupabaseService {
       'recommendation': analysis.recommendation,
       'summary': analysis.summary,
       'analyzed_at': analysis.analyzedAt.toIso8601String(),
-    });
+    }, onConflict: 'user_id,symbol,analyzed_at');
   }
 
   Future<void> deleteAnalysis(String analysisId) async {
