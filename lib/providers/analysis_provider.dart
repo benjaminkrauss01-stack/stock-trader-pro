@@ -167,6 +167,9 @@ class AnalysisProvider extends ChangeNotifier {
             // Speichere in lokaler Historie (ohne Limit-Zählung)
             await _alertService.saveAnalysis(cachedAnalysis);
 
+            // Speichere auch in Supabase für Admin-Sicht (ohne Limit-Zählung)
+            await _supabaseService.saveAnalysis(cachedAnalysis);
+
             _currentAnalysis = cachedAnalysis;
             _savedAnalyses = await _alertService.getSavedAnalyses();
             _statistics = await _alertService.getStatistics();
@@ -274,7 +277,10 @@ class AnalysisProvider extends ChangeNotifier {
       // 8. Save analysis locally
       await _alertService.saveAnalysis(analysis);
 
-      // 9. Save to global cache for other users
+      // 9. Save to user's Supabase saved_analyses
+      await _supabaseService.saveAnalysis(analysis);
+
+      // 10. Save to global cache for other users
       await _saveToCacheAsync(analysis);
 
       // Increment analysis count in Supabase and refresh local state
