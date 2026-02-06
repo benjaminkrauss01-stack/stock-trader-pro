@@ -14,9 +14,16 @@ class PortfolioScreen extends StatelessWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.background,
-        title: const Text(
-          'Portfolio',
-          style: TextStyle(color: AppColors.textPrimary),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.auto_graph, color: AppColors.primary, size: 20),
+            SizedBox(width: 8),
+            Text(
+              'Virtuelles Portfolio',
+              style: TextStyle(color: AppColors.textPrimary),
+            ),
+          ],
         ),
         actions: [
           Consumer<StockProvider>(
@@ -44,7 +51,7 @@ class PortfolioScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Your portfolio is empty',
+                    'Dein virtuelles Portfolio ist leer',
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 20,
@@ -53,7 +60,7 @@ class PortfolioScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Start by buying your first stock',
+                    'Füge deine erste Aktie virtuell hinzu',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 14,
@@ -65,7 +72,7 @@ class PortfolioScreen extends StatelessWidget {
                       // Navigate to search
                     },
                     icon: const Icon(Icons.search),
-                    label: const Text('Find Stocks'),
+                    label: const Text('Aktien suchen'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
@@ -92,7 +99,7 @@ class PortfolioScreen extends StatelessWidget {
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(16, 24, 16, 12),
                     child: Text(
-                      'Holdings',
+                      'Virtuelle Positionen',
                       style: TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 18,
@@ -117,7 +124,7 @@ class PortfolioScreen extends StatelessWidget {
                           provider.removeFromPortfolio(position.symbol);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('${position.symbol} removed from portfolio'),
+                              content: Text('${position.symbol} aus virtuellem Portfolio entfernt'),
                             ),
                           );
                         },
@@ -165,12 +172,32 @@ class _PortfolioSummary extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Total Portfolio Value',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 14,
-            ),
+          Row(
+            children: [
+              const Text(
+                'Virtueller Portfolio-Wert',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'DEMO',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(
@@ -216,11 +243,11 @@ class _PortfolioSummary extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildSummaryItem(
-                'Total Invested',
+                'Virtuell investiert',
                 Formatters.formatCurrency(provider.portfolioTotalCost),
               ),
               _buildSummaryItem(
-                'Positions',
+                'Positionen',
                 '${provider.portfolio.length}',
               ),
             ],

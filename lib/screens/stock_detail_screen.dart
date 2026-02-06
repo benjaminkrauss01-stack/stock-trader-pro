@@ -221,42 +221,44 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                     child: Row(
                       children: [
                         Expanded(
-                          child: ElevatedButton(
+                          child: ElevatedButton.icon(
                             onPressed: () => _showTradeDialog(context, 'Buy'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.profit,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text(
-                              'Buy',
+                            icon: const Icon(Icons.shopping_cart_outlined, size: 18, color: Colors.white),
+                            label: const Text(
+                              'Virtuell kaufen',
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 14,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.profit,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
-                          child: ElevatedButton(
+                          child: ElevatedButton.icon(
                             onPressed: () => _showTradeDialog(context, 'Sell'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.loss,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text(
-                              'Sell',
+                            icon: const Icon(Icons.sell_outlined, size: 18, color: Colors.white),
+                            label: const Text(
+                              'Virtuell verkaufen',
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 14,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.loss,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                           ),
@@ -405,8 +407,24 @@ class _TradeSheetState extends State<TradeSheet> {
                 ),
               ),
               const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  '📊 Virtuelles Portfolio',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               Text(
-                '${widget.action} ${widget.symbol}',
+                '${isBuy ? 'Virtuell kaufen' : 'Virtuell verkaufen'}: ${widget.symbol}',
                 style: const TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 20,
@@ -415,7 +433,7 @@ class _TradeSheetState extends State<TradeSheet> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Current Price: ${Formatters.formatCurrency(stock.price)}',
+                'Aktueller Kurs: ${Formatters.formatCurrency(stock.price)}',
                 style: const TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 14,
@@ -427,7 +445,7 @@ class _TradeSheetState extends State<TradeSheet> {
                 keyboardType: TextInputType.number,
                 style: const TextStyle(color: AppColors.textPrimary),
                 decoration: InputDecoration(
-                  labelText: 'Number of Shares',
+                  labelText: 'Anzahl Aktien',
                   labelStyle: const TextStyle(color: AppColors.textHint),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -457,7 +475,7 @@ class _TradeSheetState extends State<TradeSheet> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'Estimated Total',
+                      'Geschätzter Gesamtwert',
                       style: TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 14,
@@ -496,7 +514,9 @@ class _TradeSheetState extends State<TradeSheet> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                '${widget.action} order for $_shares shares of ${widget.symbol} submitted',
+                                isBuy
+                                    ? '$_shares ${widget.symbol} Aktien zum virtuellen Portfolio hinzugefügt'
+                                    : '$_shares ${widget.symbol} Aktien virtuell verkauft',
                               ),
                               backgroundColor: isBuy ? AppColors.profit : AppColors.loss,
                             ),
@@ -511,7 +531,7 @@ class _TradeSheetState extends State<TradeSheet> {
                     ),
                   ),
                   child: Text(
-                    'Confirm ${widget.action}',
+                    isBuy ? 'Virtuell kaufen bestätigen' : 'Virtuell verkaufen bestätigen',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
