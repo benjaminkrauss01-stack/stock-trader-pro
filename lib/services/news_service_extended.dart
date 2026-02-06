@@ -3,8 +3,16 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
 
+class _NewsCacheEntry {
+  final List<NewsArticle> data;
+  final DateTime cachedAt;
+  _NewsCacheEntry(this.data) : cachedAt = DateTime.now();
+  bool get isExpired => DateTime.now().difference(cachedAt) > const Duration(minutes: 10);
+}
+
 class ExtendedNewsService {
   final http.Client _client;
+  static final Map<String, _NewsCacheEntry> _cache = {};
 
   ExtendedNewsService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -39,8 +47,10 @@ class ExtendedNewsService {
 
   // Market News from multiple sources
   Future<List<NewsArticle>> getMarketNews({String category = 'general'}) async {
+    final cached = _cache['market'];
+    if (cached != null && !cached.isExpired) return cached.data;
+
     try {
-      // Use Yahoo Finance search for market news
       final queries = ['stock market news', 'market update', 'financial news'];
       final results = await Future.wait(
         queries.map((q) => getYahooNews(q))
@@ -48,12 +58,14 @@ class ExtendedNewsService {
 
       final allNews = results.expand((x) => x).toList();
       final seen = <String>{};
-      return allNews.where((n) => seen.add(n.uuid)).toList()
+      final deduped = allNews.where((n) => seen.add(n.uuid)).toList()
         ..sort((a, b) =>
           (b.publishedAt ?? DateTime.now()).compareTo(a.publishedAt ?? DateTime.now())
         );
+      _cache['market'] = _NewsCacheEntry(deduped);
+      return deduped;
     } catch (e) {
-      // print('Error fetching market news: $e');
+      if (cached != null) return cached.data;
     }
     return [];
   }
@@ -158,6 +170,9 @@ class ExtendedNewsService {
 
   // Political/Economic News
   Future<List<NewsArticle>> getPoliticalEconomicNews() async {
+    final cached = _cache['political'];
+    if (cached != null && !cached.isExpired) return cached.data;
+
     final queries = [
       'federal reserve policy',
       'economic policy',
@@ -170,15 +185,21 @@ class ExtendedNewsService {
     );
 
     final allNews = results.expand((x) => x).toList();
-    // Remove duplicates by UUID
     final seen = <String>{};
-    return allNews.where((n) => seen.add(n.uuid)).toList()
+    final deduped = allNews.where((n) => seen.add(n.uuid)).toList()
       ..sort((a, b) => (b.publishedAt ?? DateTime.now()).compareTo(a.publishedAt ?? DateTime.now()));
+    _cache['political'] = _NewsCacheEntry(deduped);
+    return deduped;
   }
 
   // Crypto News
   Future<List<NewsArticle>> getCryptoNews() async {
-    return getYahooNews('bitcoin ethereum crypto cryptocurrency');
+    final cached = _cache['crypto'];
+    if (cached != null && !cached.isExpired) return cached.data;
+
+    final result = await getYahooNews('bitcoin ethereum crypto cryptocurrency');
+    _cache['crypto'] = _NewsCacheEntry(result);
+    return result;
   }
 
   /// Get news for a specific symbol

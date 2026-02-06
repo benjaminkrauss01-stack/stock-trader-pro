@@ -4,8 +4,21 @@ import 'package:http/http.dart' as http;
 import '../models/stock.dart';
 import 'api_config.dart';
 
+class _CacheEntry<T> {
+  final T data;
+  final DateTime cachedAt;
+  _CacheEntry(this.data) : cachedAt = DateTime.now();
+  bool isExpired(Duration ttl) => DateTime.now().difference(cachedAt) > ttl;
+}
+
 class StockApiService {
   final http.Client _client;
+
+  // In-Memory Caches
+  final Map<String, _CacheEntry<List<Stock>>> _quotesCache = {};
+  final Map<String, _CacheEntry<List<StockCandle>>> _chartCache = {};
+  static const _quotesTtl = Duration(seconds: 30);
+  static const _chartTtl = Duration(minutes: 5);
 
   StockApiService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -72,9 +85,15 @@ class StockApiService {
   }
 
   Future<List<Stock>> getMultipleQuotes(List<String> symbols) async {
+    final cacheKey = symbols.toList()..sort();
+    final key = cacheKey.join(',');
+    final cached = _quotesCache[key];
+    if (cached != null && !cached.isExpired(_quotesTtl)) {
+      return cached.data;
+    }
+
     try {
-      final symbolsStr = symbols.join(',');
-      final url = _getQuoteUrl(symbolsStr);
+      final url = _getQuoteUrl(key);
       final response = await _client.get(
         Uri.parse(url),
         headers: ApiConfig.defaultHeaders,
@@ -83,12 +102,13 @@ class StockApiService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final results = data['quoteResponse']?['result'] as List? ?? [];
-        return results.map((q) => Stock.fromQuoteResponse(q)).toList();
-      } else {
-        // print('Multiple quotes API Error ${response.statusCode}: ${response.body}');
+        final stocks = results.map((q) => Stock.fromQuoteResponse(q)).toList();
+        _quotesCache[key] = _CacheEntry(stocks);
+        return stocks;
       }
     } catch (e) {
-      // print('Error fetching multiple quotes: $e');
+      // Return cached data on error if available
+      if (cached != null) return cached.data;
     }
     return [];
   }
@@ -98,6 +118,12 @@ class StockApiService {
     String interval = '1d',
     String range = '1mo',
   }) async {
+    final cacheKey = '$symbol:$range:$interval';
+    final cached = _chartCache[cacheKey];
+    if (cached != null && !cached.isExpired(_chartTtl)) {
+      return cached.data;
+    }
+
     try {
       final url = _getChartUrl(symbol, interval, range);
       final response = await _client.get(
@@ -132,14 +158,13 @@ class StockApiService {
                 ));
               }
             }
+            _chartCache[cacheKey] = _CacheEntry(candles);
             return candles;
           }
         }
-      } else {
-        // print('Historical data API Error ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
-      // print('Error fetching historical data: $e');
+      if (cached != null) return cached.data;
     }
     return [];
   }

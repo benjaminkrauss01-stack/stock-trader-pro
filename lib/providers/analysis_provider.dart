@@ -307,31 +307,31 @@ class AnalysisProvider extends ChangeNotifier {
         return null;
       }
 
-      // 1. Fetch historical price data (90 days)
-      final candles = await _stockService.getChartData(symbol, '3mo', '1d');
+      // 1. Fetch data in parallel: chart + historical news + current news
+      final futures = await Future.wait([
+        _stockService.getChartData(symbol, '3mo', '1d'),
+        if (_historicalNewsService.hasApiKey)
+          _historicalNewsService.getHistoricalNews(symbol),
+        _newsService.getNewsForSymbol(symbol),
+      ]);
 
+      final candles = futures[0] as List<StockCandle>;
       if (candles.isEmpty) {
         throw Exception('Keine Preisdaten verfügbar für $symbol');
       }
 
-      // Store chart data for display
       _currentChartData = candles;
       _currentChartRange = '3M';
 
-      // 2. Convert to PricePoints
       final priceHistory = _patternService.convertToPricePoints(candles);
 
-      // 3. Fetch news - historische News (2 Jahre) + aktuelle News
+      // Merge news from parallel results
       List<NewsEvent> allNewsEvents = [];
-
-      // 3a. Versuche historische News zu laden (falls API Key vorhanden)
-      if (_historicalNewsService.hasApiKey) {
-        final historicalNews = await _historicalNewsService.getHistoricalNews(symbol);
-        allNewsEvents.addAll(historicalNews);
+      if (_historicalNewsService.hasApiKey && futures.length == 3) {
+        allNewsEvents.addAll(futures[1] as List<NewsEvent>);
       }
 
-      // 3b. Aktuelle News von Yahoo als Fallback/Ergänzung
-      final recentArticles = await _newsService.getNewsForSymbol(symbol);
+      final recentArticles = futures.last as List<NewsArticle>;
       final recentNewsEvents = recentArticles
           .map(
             (article) => NewsEvent(

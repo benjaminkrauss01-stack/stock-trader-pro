@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import '../models/stock.dart';
 import '../services/stock_api_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/constants.dart';
 
-class StockProvider with ChangeNotifier {
+class StockProvider with ChangeNotifier, WidgetsBindingObserver {
   final StockApiService _apiService = StockApiService();
   final SupabaseService _supabaseService = SupabaseService();
 
@@ -95,43 +95,54 @@ class StockProvider with ChangeNotifier {
 
   void startAutoRefresh() {
     _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    WidgetsBinding.instance.addObserver(this);
+    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       refreshAll();
     });
   }
 
   void stopAutoRefresh() {
     _refreshTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
   }
 
-  Future<void> loadWatchlist() async {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      _refreshTimer?.cancel();
+    } else if (state == AppLifecycleState.resumed) {
+      refreshAll();
+      startAutoRefresh();
+    }
+  }
+
+  Future<void> loadWatchlist({bool notify = true}) async {
     try {
       _watchlistStocks = await _apiService.getMultipleQuotes(_watchlistSymbols);
-      notifyListeners();
+      if (notify) notifyListeners();
     } catch (e) {
       _error = 'Failed to load watchlist: $e';
-      // Re-throw to be caught by the caller (initialize)
       rethrow;
     }
   }
 
-  Future<void> loadIndices() async {
+  Future<void> loadIndices({bool notify = true}) async {
     try {
       _indexStocks = await _apiService.getMultipleQuotes(DefaultStocks.indices);
-      notifyListeners();
+      if (notify) notifyListeners();
     } catch (e) {
       _error = 'Failed to load indices: $e';
-      // Re-throw to be caught by the caller (initialize)
       rethrow;
     }
   }
 
   Future<void> refreshAll() async {
     await Future.wait([
-      loadWatchlist(),
-      loadIndices(),
+      loadWatchlist(notify: false),
+      loadIndices(notify: false),
       if (_selectedStock != null) refreshSelectedStock(),
     ]);
+    notifyListeners();
   }
 
   Future<void> selectStock(String symbol) async {

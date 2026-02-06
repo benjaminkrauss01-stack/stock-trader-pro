@@ -23,11 +23,37 @@ class DashboardScreen extends StatefulWidget {
 
 class DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
+  final Map<int, Widget> _cachedTabs = {};
 
   void setTabIndex(int index) {
     setState(() {
       _currentIndex = index;
     });
+  }
+
+  Widget _buildBody() {
+    // Cache besuchte Tabs damit sie nicht neu initialisiert werden
+    _cachedTabs.putIfAbsent(_currentIndex, () {
+      switch (_currentIndex) {
+        case 0: return const _HomeTab();
+        case 1: return const CryptoScreen();
+        case 2: return const ETFScreen();
+        case 3: return const AnalysisScreen();
+        case 4: return const NewsHubScreen();
+        case 5: return const PortfolioScreen();
+        default: return const _HomeTab();
+      }
+    });
+
+    // Nur gecachte Tabs im IndexedStack rendern (nicht alle 6)
+    final entries = _cachedTabs.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    final activeIndex = entries.indexWhere((e) => e.key == _currentIndex);
+
+    return IndexedStack(
+      index: activeIndex,
+      children: entries.map((e) => e.value).toList(),
+    );
   }
 
   @override
@@ -44,17 +70,7 @@ class DashboardScreenState extends State<DashboardScreen> {
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          IndexedStack(
-            index: _currentIndex,
-            children: const [
-              _HomeTab(),
-              CryptoScreen(),
-              ETFScreen(),
-              AnalysisScreen(),
-              NewsHubScreen(),
-              PortfolioScreen(),
-            ],
-          ),
+          _buildBody(),
           // Disclaimer Sticker
           const Positioned(
             bottom: 0,

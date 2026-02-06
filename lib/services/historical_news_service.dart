@@ -76,13 +76,9 @@ class HistoricalNewsService {
           }
 
           pageCount++;
-
-          // Rate Limit beachten (5 calls/min für Free Tier)
-          await Future.delayed(const Duration(milliseconds: 250));
         } else if (response.statusCode == 429) {
-          // Rate limit erreicht
-          // print('Rate limit erreicht, warte 60 Sekunden...');
-          await Future.delayed(const Duration(seconds: 60));
+          // Rate limit erreicht — warte und retry
+          await Future.delayed(const Duration(seconds: 12));
         } else {
           // print('Polygon API Error: ${response.statusCode}');
           break;
