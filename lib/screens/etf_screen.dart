@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/etf.dart';
+import '../models/stock.dart';
 import '../providers/analysis_provider.dart';
 import '../providers/stock_provider.dart';
 import '../utils/constants.dart';
@@ -58,7 +59,7 @@ class _ETFScreenState extends State<ETFScreen> with SingleTickerProviderStateMix
       appBar: AppBar(
         backgroundColor: AppColors.background,
         title: const Text(
-          'ETFs & Sectors',
+          'ETFs & Sektoren',
           style: TextStyle(color: AppColors.textPrimary),
         ),
         bottom: TabBar(
@@ -67,8 +68,8 @@ class _ETFScreenState extends State<ETFScreen> with SingleTickerProviderStateMix
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textSecondary,
           tabs: const [
-            Tab(text: 'Popular ETFs'),
-            Tab(text: 'Sectors'),
+            Tab(text: 'Beliebte ETFs'),
+            Tab(text: 'Sektoren'),
           ],
         ),
       ),
@@ -352,8 +353,8 @@ class _ETFCard extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildInfoChip('AUM', Formatters.formatMarketCap(etf.aum)),
-                      _buildInfoChip('Exp. Ratio', '${etf.expenseRatio.toStringAsFixed(2)}%'),
+                      _buildInfoChip('Volumen', Formatters.formatMarketCap(etf.aum)),
+                      _buildInfoChip('Kosten', '${etf.expenseRatio.toStringAsFixed(2)}%'),
                       _buildInfoChip('YTD', Formatters.formatPercent(etf.ytdReturn)),
                     ],
                   ),
@@ -531,9 +532,46 @@ class _ETFDetailSheet extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 24),
+              // Virtual Buy/Sell Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showTradeDialog(context, true),
+                      icon: const Icon(Icons.shopping_cart_outlined, size: 18, color: Colors.white),
+                      label: const Text(
+                        'Virtuell kaufen',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.profit,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showTradeDialog(context, false),
+                      icon: const Icon(Icons.sell_outlined, size: 18, color: Colors.white),
+                      label: const Text(
+                        'Virtuell verkaufen',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.loss,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
               // Performance
               const Text(
-                'Performance',
+                'Wertentwicklung',
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 16,
@@ -545,25 +583,25 @@ class _ETFDetailSheet extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _buildPerformanceChip('YTD', etf.ytdReturn),
-                  _buildPerformanceChip('1Y', etf.oneYearReturn),
-                  _buildPerformanceChip('3Y', etf.threeYearReturn),
+                  _buildPerformanceChip('1J', etf.oneYearReturn),
+                  _buildPerformanceChip('3J', etf.threeYearReturn),
                 ],
               ),
               const SizedBox(height: 24),
               // Stats
               _buildStatRow('NAV', Formatters.formatCurrency(etf.nav)),
-              _buildStatRow('AUM', Formatters.formatMarketCap(etf.aum)),
-              _buildStatRow('Expense Ratio', '${etf.expenseRatio.toStringAsFixed(2)}%'),
-              _buildStatRow('Category', etf.category),
-              if (etf.issuer != null) _buildStatRow('Issuer', etf.issuer!),
-              _buildStatRow('Volume', Formatters.formatVolume(etf.volume)),
-              _buildStatRow('Day High', Formatters.formatCurrency(etf.high)),
-              _buildStatRow('Day Low', Formatters.formatCurrency(etf.low)),
+              _buildStatRow('Fondsvolumen', Formatters.formatMarketCap(etf.aum)),
+              _buildStatRow('Kostenquote', '${etf.expenseRatio.toStringAsFixed(2)}%'),
+              _buildStatRow('Kategorie', etf.category),
+              if (etf.issuer != null) _buildStatRow('Herausgeber', etf.issuer!),
+              _buildStatRow('Volumen', Formatters.formatVolume(etf.volume)),
+              _buildStatRow('Tageshoch', Formatters.formatCurrency(etf.high)),
+              _buildStatRow('Tagestief', Formatters.formatCurrency(etf.low)),
               const SizedBox(height: 24),
               // Top Holdings
               if (etf.topHoldings.isNotEmpty) ...[
                 const Text(
-                  'Top Holdings',
+                  'Top Positionen',
                   style: TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 16,
@@ -577,6 +615,142 @@ class _ETFDetailSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  void _showTradeDialog(BuildContext context, bool isBuy) {
+    final sharesController = TextEditingController();
+    int shares = 0;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final total = shares * etf.price;
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 24, right: 24, top: 24,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: AppColors.textHint, borderRadius: BorderRadius.circular(2)),
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    '📊 Virtuelles Portfolio',
+                    style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w500),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '${isBuy ? 'Virtuell kaufen' : 'Virtuell verkaufen'}: ${etf.symbol}',
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Aktueller Kurs: ${Formatters.formatCurrency(etf.price)}',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                ),
+                const SizedBox(height: 24),
+                TextField(
+                  controller: sharesController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Anzahl Anteile',
+                    labelStyle: const TextStyle(color: AppColors.textHint),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.primary),
+                    ),
+                    filled: true,
+                    fillColor: AppColors.card,
+                  ),
+                  onChanged: (value) {
+                    setDialogState(() {
+                      shares = int.tryParse(value) ?? 0;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12)),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Geschätzter Gesamtwert', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                      Text(Formatters.formatCurrency(total), style: const TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: shares > 0
+                        ? () {
+                            final provider = Provider.of<StockProvider>(ctx, listen: false);
+                            if (isBuy) {
+                              provider.addToPortfolio(
+                                PortfolioPosition(
+                                  symbol: etf.symbol,
+                                  name: etf.name,
+                                  shares: shares,
+                                  avgPrice: etf.price,
+                                  currentPrice: etf.price,
+                                  purchaseDate: DateTime.now(),
+                                ),
+                              );
+                            }
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  isBuy
+                                      ? '$shares ${etf.symbol} Anteile zum virtuellen Portfolio hinzugefügt'
+                                      : '$shares ${etf.symbol} Anteile virtuell verkauft',
+                                ),
+                                backgroundColor: isBuy ? AppColors.profit : AppColors.loss,
+                              ),
+                            );
+                          }
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isBuy ? AppColors.profit : AppColors.loss,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text(
+                      isBuy ? 'Virtuell kaufen bestätigen' : 'Virtuell verkaufen bestätigen',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
