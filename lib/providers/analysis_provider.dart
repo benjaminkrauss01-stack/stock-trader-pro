@@ -38,6 +38,18 @@ class AnalysisProvider extends ChangeNotifier {
 
   List<MarketAnalysis> get savedAnalyses => _savedAnalyses;
   List<TriggerAlert> get activeAlerts => _activeAlerts;
+
+  /// Trefferquote: {correct, total, percent}
+  Map<String, dynamic> get analysisAccuracy {
+    final evaluated = _savedAnalyses.where((a) => a.wasCorrect != null).toList();
+    if (evaluated.isEmpty) return {'correct': 0, 'total': 0, 'percent': 0.0};
+    final correct = evaluated.where((a) => a.wasCorrect == true).length;
+    return {
+      'correct': correct,
+      'total': evaluated.length,
+      'percent': (correct / evaluated.length * 100),
+    };
+  }
   MarketAnalysis? get currentAnalysis => _currentAnalysis;
   List<StockCandle> get currentChartData => _currentChartData;
   String get currentChartRange => _currentChartRange;
@@ -110,6 +122,84 @@ class AnalysisProvider extends ChangeNotifier {
     _activeAlerts = await _alertService.getActiveAlerts();
     _statistics = await _alertService.getStatistics();
     notifyListeners();
+
+    // Automatisch abgelaufene Analysen evaluieren
+    await evaluateExpiredAnalyses();
+  }
+
+  /// Evaluiert abgelaufene Analysen durch Vergleich mit aktuellem Preis
+  Future<void> evaluateExpiredAnalyses() async {
+    final now = DateTime.now();
+    final toEvaluate = _savedAnalyses.where((a) =>
+      a.isExpired &&
+      !a.isEvaluated &&
+      a.priceAtAnalysis != null
+    ).toList();
+
+    if (toEvaluate.isEmpty) return;
+
+    // Sammle einzigartige Symbole
+    final symbols = toEvaluate.map((a) => a.symbol).toSet().toList();
+
+    try {
+      final quotes = await _stockService.getMultipleQuotes(symbols);
+      final priceMap = <String, double>{};
+      for (final stock in quotes) {
+        priceMap[stock.symbol.toUpperCase()] = stock.price;
+      }
+
+      bool updated = false;
+      for (int i = 0; i < _savedAnalyses.length; i++) {
+        final analysis = _savedAnalyses[i];
+        if (!analysis.isExpired || analysis.isEvaluated || analysis.priceAtAnalysis == null) continue;
+
+        final actualPrice = priceMap[analysis.symbol.toUpperCase()];
+        if (actualPrice == null) continue;
+
+        final movePercent = ((actualPrice - analysis.priceAtAnalysis!) / analysis.priceAtAnalysis!) * 100;
+
+        bool wasCorrect;
+        switch (analysis.direction) {
+          case AnalysisDirection.bullish:
+            wasCorrect = actualPrice > analysis.priceAtAnalysis!;
+            break;
+          case AnalysisDirection.bearish:
+            wasCorrect = actualPrice < analysis.priceAtAnalysis!;
+            break;
+          case AnalysisDirection.neutral:
+            wasCorrect = movePercent.abs() < 2.0;
+            break;
+        }
+
+        _savedAnalyses[i] = analysis.copyWith(
+          actualPrice: actualPrice,
+          actualMovePercent: movePercent,
+          wasCorrect: wasCorrect,
+          evaluatedAt: now,
+        );
+
+        // In Supabase speichern
+        try {
+          await _supabaseService.evaluateAnalysis(
+            symbol: analysis.symbol,
+            analyzedAt: analysis.analyzedAt,
+            actualPrice: actualPrice,
+            actualMovePercent: movePercent,
+            wasCorrect: wasCorrect,
+          );
+        } catch (e) {
+          debugPrint('Error saving evaluation for ${analysis.symbol}: $e');
+        }
+
+        updated = true;
+      }
+
+      if (updated) {
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error evaluating expired analyses: $e');
+    }
   }
 
   /// Lädt Chart-Daten für ein Symbol mit neuem Zeitraum

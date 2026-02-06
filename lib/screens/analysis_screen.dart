@@ -556,6 +556,9 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
             ],
           ),
         ),
+        // Trefferquote-Card (nur anzeigen wenn min. 3 evaluierte Analysen)
+        if (provider.analysisAccuracy['total'] >= 3)
+          _buildAccuracyCard(provider),
         if (sortedSymbols.isEmpty)
           Card(
             color: AppColors.card,
@@ -770,6 +773,99 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
     );
   }
 
+  Widget _buildAccuracyCard(AnalysisProvider provider) {
+    final accuracy = provider.analysisAccuracy;
+    final correct = accuracy['correct'] as int;
+    final total = accuracy['total'] as int;
+    final percent = accuracy['percent'] as double;
+
+    // Aufschlüsselung nach Richtung
+    final evaluated = provider.savedAnalyses.where((a) => a.wasCorrect != null).toList();
+    final bullishCorrect = evaluated.where((a) => a.direction == AnalysisDirection.bullish && a.wasCorrect == true).length;
+    final bullishTotal = evaluated.where((a) => a.direction == AnalysisDirection.bullish).length;
+    final bearishCorrect = evaluated.where((a) => a.direction == AnalysisDirection.bearish && a.wasCorrect == true).length;
+    final bearishTotal = evaluated.where((a) => a.direction == AnalysisDirection.bearish).length;
+
+    return Card(
+      color: AppColors.card,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.analytics,
+                  color: percent >= 60 ? AppColors.profit : percent >= 40 ? Colors.orange : AppColors.loss,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'KI-Trefferquote',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${percent.toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    color: percent >= 60 ? AppColors.profit : percent >= 40 ? Colors.orange : AppColors.loss,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Progress bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: percent / 100,
+                backgroundColor: AppColors.cardLight,
+                valueColor: AlwaysStoppedAnimation(
+                  percent >= 60 ? AppColors.profit : percent >= 40 ? Colors.orange : AppColors.loss,
+                ),
+                minHeight: 6,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '$correct von $total Analysen korrekt',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                Row(
+                  children: [
+                    if (bullishTotal > 0)
+                      Text(
+                        'Bull $bullishCorrect/$bullishTotal',
+                        style: const TextStyle(color: AppColors.profit, fontSize: 11),
+                      ),
+                    if (bullishTotal > 0 && bearishTotal > 0)
+                      const Text('  ', style: TextStyle(fontSize: 11)),
+                    if (bearishTotal > 0)
+                      Text(
+                        'Bear $bearishCorrect/$bearishTotal',
+                        style: const TextStyle(color: AppColors.loss, fontSize: 11),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAnalysisTable(List<MarketAnalysis> analyses, AnalysisProvider provider) {
     return Container(
       decoration: BoxDecoration(
@@ -815,16 +911,30 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
             ? AppColors.loss
             : AppColors.neutral;
 
-    // Prüfe ob Zeitraum abgelaufen und ob korrekt
-    final endDate = analysis.analyzedAt.add(Duration(days: analysis.timeframeDays));
-    final isExpired = DateTime.now().isAfter(endDate);
-    String statusText = 'Läuft';
-    Color statusColor = Colors.orange;
+    // Status basierend auf Evaluierung
+    String statusText;
+    Color statusColor;
 
-    if (isExpired) {
-      // Für eine echte Auswertung bräuchten wir die historischen Preise
-      // Hier zeigen wir erstmal nur "Abgelaufen"
-      statusText = 'Beendet';
+    if (!analysis.isExpired) {
+      statusText = 'Läuft';
+      statusColor = Colors.orange;
+    } else if (analysis.isEvaluated) {
+      if (analysis.wasCorrect == true) {
+        statusText = analysis.actualMovePercent != null
+            ? '${analysis.actualMovePercent! >= 0 ? "+" : ""}${analysis.actualMovePercent!.toStringAsFixed(1)}%'
+            : 'Richtig';
+        statusColor = AppColors.profit;
+      } else {
+        statusText = analysis.actualMovePercent != null
+            ? '${analysis.actualMovePercent! >= 0 ? "+" : ""}${analysis.actualMovePercent!.toStringAsFixed(1)}%'
+            : 'Falsch';
+        statusColor = AppColors.loss;
+      }
+    } else if (analysis.priceAtAnalysis == null) {
+      statusText = '–';
+      statusColor = AppColors.textSecondary;
+    } else {
+      statusText = 'Auswertung...';
       statusColor = AppColors.textSecondary;
     }
 
@@ -931,13 +1041,27 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
           // Status
           Expanded(
             flex: 2,
-            child: Text(
-              statusText,
-              style: TextStyle(
-                color: statusColor,
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
+            child: Row(
+              children: [
+                if (analysis.isEvaluated)
+                  Icon(
+                    analysis.wasCorrect == true ? Icons.check_circle : Icons.cancel,
+                    color: statusColor,
+                    size: 13,
+                  ),
+                if (analysis.isEvaluated) const SizedBox(width: 2),
+                Flexible(
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ),
           // KI Analyse Button

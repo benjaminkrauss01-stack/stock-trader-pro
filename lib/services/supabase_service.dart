@@ -179,6 +179,12 @@ class SupabaseService {
         recommendation: json['recommendation'] as String,
         summary: json['summary'] as String,
         priceAtAnalysis: (json['price_at_analysis'] as num?)?.toDouble(),
+        actualPrice: (json['actual_price'] as num?)?.toDouble(),
+        actualMovePercent: (json['actual_move_percent'] as num?)?.toDouble(),
+        wasCorrect: json['was_correct'] as bool?,
+        evaluatedAt: json['evaluated_at'] != null
+            ? DateTime.tryParse(json['evaluated_at'] as String)
+            : null,
       );
     }).toList();
   }
@@ -200,6 +206,28 @@ class SupabaseService {
       'analyzed_at': analysis.analyzedAt.toIso8601String(),
       'price_at_analysis': analysis.priceAtAnalysis,
     }, onConflict: 'user_id,symbol,analyzed_at');
+  }
+
+  Future<void> evaluateAnalysis({
+    required String symbol,
+    required DateTime analyzedAt,
+    required double actualPrice,
+    required double actualMovePercent,
+    required bool wasCorrect,
+  }) async {
+    if (userId == null) return;
+
+    await _client
+        .from('saved_analyses')
+        .update({
+          'actual_price': actualPrice,
+          'actual_move_percent': actualMovePercent,
+          'was_correct': wasCorrect,
+          'evaluated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('user_id', userId!)
+        .eq('symbol', symbol)
+        .eq('analyzed_at', analyzedAt.toIso8601String());
   }
 
   Future<void> deleteAnalysis(String analysisId) async {

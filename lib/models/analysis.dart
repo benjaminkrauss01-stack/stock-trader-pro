@@ -224,6 +224,10 @@ class MarketAnalysis {
   final String summary;
   final bool alertEnabled;
   final double? priceAtAnalysis;
+  final double? actualPrice;
+  final double? actualMovePercent;
+  final bool? wasCorrect;
+  final DateTime? evaluatedAt;
 
   MarketAnalysis({
     required this.symbol,
@@ -243,6 +247,10 @@ class MarketAnalysis {
     required this.summary,
     this.alertEnabled = false,
     this.priceAtAnalysis,
+    this.actualPrice,
+    this.actualMovePercent,
+    this.wasCorrect,
+    this.evaluatedAt,
   });
 
   /// Berechnet den Zielwert basierend auf Preis und erwarteter Bewegung
@@ -273,7 +281,17 @@ class MarketAnalysis {
     }
   }
 
-  MarketAnalysis copyWith({bool? alertEnabled, double? priceAtAnalysis}) {
+  bool get isExpired => DateTime.now().isAfter(analyzedAt.add(Duration(days: timeframeDays)));
+  bool get isEvaluated => wasCorrect != null;
+
+  MarketAnalysis copyWith({
+    bool? alertEnabled,
+    double? priceAtAnalysis,
+    double? actualPrice,
+    double? actualMovePercent,
+    bool? wasCorrect,
+    DateTime? evaluatedAt,
+  }) {
     return MarketAnalysis(
       symbol: symbol,
       assetType: assetType,
@@ -292,6 +310,10 @@ class MarketAnalysis {
       summary: summary,
       alertEnabled: alertEnabled ?? this.alertEnabled,
       priceAtAnalysis: priceAtAnalysis ?? this.priceAtAnalysis,
+      actualPrice: actualPrice ?? this.actualPrice,
+      actualMovePercent: actualMovePercent ?? this.actualMovePercent,
+      wasCorrect: wasCorrect ?? this.wasCorrect,
+      evaluatedAt: evaluatedAt ?? this.evaluatedAt,
     );
   }
 
@@ -313,6 +335,10 @@ class MarketAnalysis {
     'summary': summary,
     'alertEnabled': alertEnabled,
     'priceAtAnalysis': priceAtAnalysis,
+    'actualPrice': actualPrice,
+    'actualMovePercent': actualMovePercent,
+    'wasCorrect': wasCorrect,
+    'evaluatedAt': evaluatedAt?.toIso8601String(),
   };
 
   factory MarketAnalysis.fromJson(Map<String, dynamic> json) => MarketAnalysis(
@@ -342,6 +368,10 @@ class MarketAnalysis {
     summary: json['summary'] ?? '',
     alertEnabled: json['alertEnabled'] ?? false,
     priceAtAnalysis: (json['priceAtAnalysis'] as num?)?.toDouble(),
+    actualPrice: (json['actualPrice'] as num?)?.toDouble(),
+    actualMovePercent: (json['actualMovePercent'] as num?)?.toDouble(),
+    wasCorrect: json['wasCorrect'] as bool?,
+    evaluatedAt: json['evaluatedAt'] != null ? DateTime.tryParse(json['evaluatedAt']) : null,
   );
 
   String toJsonString() => jsonEncode(toJson());
