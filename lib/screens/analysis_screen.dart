@@ -5,6 +5,7 @@ import '../providers/analysis_provider.dart';
 import '../utils/constants.dart';
 import '../utils/formatters.dart';
 import '../widgets/analysis_chart_widget.dart';
+import '../widgets/app_bar_actions.dart';
 
 class AnalysisScreen extends StatefulWidget {
   const AnalysisScreen({super.key});
@@ -56,6 +57,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
             Text('KI-Analyse', style: TextStyle(color: AppColors.textPrimary)),
           ],
         ),
+        actions: buildCommonAppBarActions(context),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppColors.primary,

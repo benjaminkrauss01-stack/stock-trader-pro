@@ -4,6 +4,7 @@ import '../providers/stock_provider.dart';
 import '../utils/constants.dart';
 import '../utils/formatters.dart';
 import 'stock_detail_screen.dart';
+import '../widgets/app_bar_actions.dart';
 
 class PortfolioScreen extends StatelessWidget {
   const PortfolioScreen({super.key});
@@ -26,6 +27,7 @@ class PortfolioScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          ...buildCommonAppBarActions(context),
           Consumer<StockProvider>(
             builder: (context, provider, _) {
               if (provider.portfolio.isEmpty) return const SizedBox.shrink();

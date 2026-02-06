@@ -8,6 +8,7 @@ import '../services/crypto_service.dart';
 import '../utils/constants.dart';
 import '../utils/formatters.dart';
 import 'dashboard_screen.dart';
+import '../widgets/app_bar_actions.dart';
 
 class CryptoScreen extends StatefulWidget {
   const CryptoScreen({super.key});
@@ -81,6 +82,7 @@ class _CryptoScreenState extends State<CryptoScreen> {
           style: TextStyle(color: AppColors.textPrimary),
         ),
         actions: [
+          ...buildCommonAppBarActions(context),
           IconButton(
             icon: const Icon(Icons.refresh, color: AppColors.textPrimary),
             onPressed: _loadData,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/news_service_extended.dart';
 import '../utils/constants.dart';
+import '../widgets/app_bar_actions.dart';
 
 class NewsHubScreen extends StatefulWidget {
   const NewsHubScreen({super.key});
@@ -87,6 +88,7 @@ class _NewsHubScreenState extends State<NewsHubScreen> with SingleTickerProvider
           style: TextStyle(color: AppColors.textPrimary),
         ),
         actions: [
+          ...buildCommonAppBarActions(context),
           IconButton(
             icon: const Icon(Icons.refresh, color: AppColors.textPrimary),
             onPressed: _loadAllNews,

@@ -7,6 +7,7 @@ import '../providers/stock_provider.dart';
 import '../utils/constants.dart';
 import '../utils/formatters.dart';
 import 'dashboard_screen.dart';
+import '../widgets/app_bar_actions.dart';
 
 class ETFScreen extends StatefulWidget {
   const ETFScreen({super.key});
@@ -62,6 +63,7 @@ class _ETFScreenState extends State<ETFScreen> with SingleTickerProviderStateMix
           'ETFs & Sektoren',
           style: TextStyle(color: AppColors.textPrimary),
         ),
+        actions: buildCommonAppBarActions(context),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppColors.primary,
