@@ -178,6 +178,7 @@ class SupabaseService {
         riskFactors: List<String>.from(json['risk_factors'] ?? []),
         recommendation: json['recommendation'] as String,
         summary: json['summary'] as String,
+        priceAtAnalysis: (json['price_at_analysis'] as num?)?.toDouble(),
       );
     }).toList();
   }
@@ -197,6 +198,7 @@ class SupabaseService {
       'recommendation': analysis.recommendation,
       'summary': analysis.summary,
       'analyzed_at': analysis.analyzedAt.toIso8601String(),
+      'price_at_analysis': analysis.priceAtAnalysis,
     }, onConflict: 'user_id,symbol,analyzed_at');
   }
 

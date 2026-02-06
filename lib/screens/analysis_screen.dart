@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/analysis.dart';
 import '../providers/analysis_provider.dart';
 import '../utils/constants.dart';
+import '../utils/formatters.dart';
 import '../widgets/analysis_chart_widget.dart';
 
 class AnalysisScreen extends StatefulWidget {
@@ -789,7 +790,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
                 Expanded(flex: 2, child: Text('Datum', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                 Expanded(flex: 2, child: Text('Richtung', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                 Expanded(flex: 2, child: Text('Bewegung', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                Expanded(flex: 1, child: Text('Tage', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                Expanded(flex: 2, child: Text('Zielwert', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                 Expanded(flex: 2, child: Text('Wahrsch.', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                 Expanded(flex: 2, child: Text('Status', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                 SizedBox(width: 40, child: Text('KI', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
@@ -880,13 +881,32 @@ class _AnalysisScreenState extends State<AnalysisScreen> with SingleTickerProvid
               ),
             ),
           ),
-          // Zeitraum
+          // Zielwert
           Expanded(
-            flex: 1,
-            child: Text(
-              '${analysis.timeframeDays}',
-              style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
-            ),
+            flex: 2,
+            child: analysis.targetPrice != null
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        Formatters.formatCurrency(analysis.targetPrice!),
+                        style: TextStyle(
+                          color: directionColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (analysis.priceAtAnalysis != null)
+                        Text(
+                          'von ${Formatters.formatCurrency(analysis.priceAtAnalysis!)}',
+                          style: const TextStyle(color: AppColors.textHint, fontSize: 9),
+                        ),
+                    ],
+                  )
+                : const Text(
+                    '-',
+                    style: TextStyle(color: AppColors.textHint, fontSize: 12),
+                  ),
           ),
           // Wahrscheinlichkeit
           Expanded(

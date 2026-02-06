@@ -177,13 +177,20 @@ class AnalysisProvider extends ChangeNotifier {
               _currentChartRange = '3M';
             }
 
+            // Preis zum Analysezeitpunkt hinzufügen falls noch nicht vorhanden
+            final analysisWithPrice = cachedAnalysis.priceAtAnalysis != null
+                ? cachedAnalysis
+                : candles.isNotEmpty
+                    ? cachedAnalysis.copyWith(priceAtAnalysis: candles.last.close)
+                    : cachedAnalysis;
+
             // Speichere in lokaler Historie (ohne Limit-Zählung)
-            await _alertService.saveAnalysis(cachedAnalysis);
+            await _alertService.saveAnalysis(analysisWithPrice);
 
             // Speichere auch in Supabase für Admin-Sicht (ohne Limit-Zählung)
-            await _supabaseService.saveAnalysis(cachedAnalysis);
+            await _supabaseService.saveAnalysis(analysisWithPrice);
 
-            _currentAnalysis = cachedAnalysis;
+            _currentAnalysis = analysisWithPrice;
             _savedAnalyses = await _alertService.getSavedAnalyses();
             _statistics = await _alertService.getStatistics();
 
@@ -278,7 +285,7 @@ class AnalysisProvider extends ChangeNotifier {
       final customPrompt = await _supabaseService.getAiPrompt();
 
       // 7. Call AI for deep analysis
-      final analysis = await _aiService.analyzeAsset(
+      var analysis = await _aiService.analyzeAsset(
         symbol: symbol,
         assetType: assetType,
         priceHistory: priceHistory,
@@ -286,6 +293,10 @@ class AnalysisProvider extends ChangeNotifier {
         significantMoves: significantMoves,
         customPromptTemplate: customPrompt,
       );
+
+      // Preis zum Analysezeitpunkt speichern
+      final currentPrice = candles.last.close;
+      analysis = analysis.copyWith(priceAtAnalysis: currentPrice);
 
       // 8. Save analysis locally
       await _alertService.saveAnalysis(analysis);

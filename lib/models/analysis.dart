@@ -223,6 +223,7 @@ class MarketAnalysis {
   final String recommendation;
   final String summary;
   final bool alertEnabled;
+  final double? priceAtAnalysis;
 
   MarketAnalysis({
     required this.symbol,
@@ -241,7 +242,14 @@ class MarketAnalysis {
     required this.recommendation,
     required this.summary,
     this.alertEnabled = false,
+    this.priceAtAnalysis,
   });
+
+  /// Berechnet den Zielwert basierend auf Preis und erwarteter Bewegung
+  double? get targetPrice {
+    if (priceAtAnalysis == null) return null;
+    return priceAtAnalysis! * (1 + expectedMovePercent / 100);
+  }
 
   String get directionText {
     switch (direction) {
@@ -265,7 +273,7 @@ class MarketAnalysis {
     }
   }
 
-  MarketAnalysis copyWith({bool? alertEnabled}) {
+  MarketAnalysis copyWith({bool? alertEnabled, double? priceAtAnalysis}) {
     return MarketAnalysis(
       symbol: symbol,
       assetType: assetType,
@@ -283,6 +291,7 @@ class MarketAnalysis {
       recommendation: recommendation,
       summary: summary,
       alertEnabled: alertEnabled ?? this.alertEnabled,
+      priceAtAnalysis: priceAtAnalysis ?? this.priceAtAnalysis,
     );
   }
 
@@ -303,6 +312,7 @@ class MarketAnalysis {
     'recommendation': recommendation,
     'summary': summary,
     'alertEnabled': alertEnabled,
+    'priceAtAnalysis': priceAtAnalysis,
   };
 
   factory MarketAnalysis.fromJson(Map<String, dynamic> json) => MarketAnalysis(
@@ -331,6 +341,7 @@ class MarketAnalysis {
     recommendation: json['recommendation'] ?? '',
     summary: json['summary'] ?? '',
     alertEnabled: json['alertEnabled'] ?? false,
+    priceAtAnalysis: (json['priceAtAnalysis'] as num?)?.toDouble(),
   );
 
   String toJsonString() => jsonEncode(toJson());
