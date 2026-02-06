@@ -34,7 +34,17 @@ class AIAnalysisService {
     final systemMessage = OpenAIChatCompletionChoiceMessageModel(
       content: [
         OpenAIChatCompletionChoiceMessageContentItemModel.text(
-          'Du bist ein erfahrener Finanzanalyst. Antworte NUR mit dem verlangten JSON, keinen weiteren Erklärungen.',
+          'Du bist ein quantitativer Finanzanalyst mit Expertise in technischer Analyse, Sentiment-Analyse und statistischer Mustererkennung. '
+          'Deine Aufgabe: Datengetriebene Prognosen mit kalibrierten Wahrscheinlichkeiten. '
+          'WICHTIGE REGELN:\n'
+          '- Confidence 0-30: Kaum erkennbare Muster, unklar\n'
+          '- Confidence 31-55: Leichte Tendenz, gemischte Signale\n'
+          '- Confidence 56-75: Klare Muster mit mehreren übereinstimmenden Signalen\n'
+          '- Confidence 76-100: NUR bei starker Konvergenz von Technik + News + Momentum\n'
+          '- Sei bei NEUTRAL nicht ängstlich — wähle eine Richtung wenn >55% der Signale dafür sprechen\n'
+          '- expected_move_percent soll REALISTISCH sein (typisch: 2-8% in 7-30 Tagen)\n'
+          '- timeframe_days: 7 bei kurzfristigen Katalysatoren, 14-30 bei Trend-Signalen\n'
+          'Antworte NUR mit dem verlangten JSON.',
         ),
       ],
       role: OpenAIChatMessageRole.system,
