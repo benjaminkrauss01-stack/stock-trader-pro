@@ -26,7 +26,7 @@ class _CommunityAnalysesScreenState extends State<CommunityAnalysesScreen> {
   bool _isLoading = true;
   String? _error;
 
-  SortMode _sortMode = SortMode.newest;
+  SortMode _sortMode = SortMode.largestMove;
   FilterDirection _filterDirection = FilterDirection.all;
   FilterAssetType _filterAssetType = FilterAssetType.all;
   int? _expandedIndex;
@@ -227,22 +227,44 @@ class _CommunityAnalysesScreenState extends State<CommunityAnalysesScreen> {
             '${_filteredAndSorted.length} Analysen',
             style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
           ),
-          const SizedBox(height: 8),
-          // Sort chips
+          const SizedBox(height: 10),
+          // Sortierung
+          Row(
+            children: [
+              const Icon(Icons.sort, size: 14, color: AppColors.textHint),
+              const SizedBox(width: 6),
+              const Text(
+                'Sortierung',
+                style: TextStyle(color: AppColors.textHint, fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildSortChip('Neueste', SortMode.newest),
-                const SizedBox(width: 6),
                 _buildSortChip('Größte Bewegung', SortMode.largestMove),
+                const SizedBox(width: 6),
+                _buildSortChip('Neueste', SortMode.newest),
                 const SizedBox(width: 6),
                 _buildSortChip('Höchste Konfidenz', SortMode.highestConfidence),
               ],
             ),
           ),
-          const SizedBox(height: 8),
-          // Filter chips
+          const SizedBox(height: 12),
+          // Richtung
+          Row(
+            children: [
+              const Icon(Icons.trending_flat, size: 14, color: AppColors.textHint),
+              const SizedBox(width: 6),
+              const Text(
+                'Richtung',
+                style: TextStyle(color: AppColors.textHint, fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -254,7 +276,26 @@ class _CommunityAnalysesScreenState extends State<CommunityAnalysesScreen> {
                 _buildDirectionChip('Bearish ↓', FilterDirection.bearish),
                 const SizedBox(width: 6),
                 _buildDirectionChip('Neutral →', FilterDirection.neutral),
-                const SizedBox(width: 12),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Asset-Typ
+          Row(
+            children: [
+              const Icon(Icons.category_outlined, size: 14, color: AppColors.textHint),
+              const SizedBox(width: 6),
+              const Text(
+                'Asset-Typ',
+                style: TextStyle(color: AppColors.textHint, fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
                 _buildAssetChip('Alle', FilterAssetType.all),
                 const SizedBox(width: 6),
                 _buildAssetChip('Aktien', FilterAssetType.stock),
@@ -401,7 +442,6 @@ class _CommunityAnalysesScreenState extends State<CommunityAnalysesScreen> {
     final analyzedAt = DateTime.tryParse(data['analyzed_at'] ?? '') ?? DateTime.now();
     final priceAtAnalysis = (data['price_at_analysis'] as num?)?.toDouble();
     final wasCorrect = data['was_correct'] as bool?;
-    final userName = data['user_display_name'] as String? ?? 'Anonym';
     final keyTriggers = _parseJsonList(data['key_triggers']);
     final riskFactors = _parseJsonList(data['risk_factors']);
 
@@ -563,20 +603,10 @@ class _CommunityAnalysesScreenState extends State<CommunityAnalysesScreen> {
                         const SizedBox(height: 2),
                         Row(
                           children: [
-                            Icon(Icons.person_outline, size: 11, color: AppColors.textHint),
-                            const SizedBox(width: 3),
-                            Text(
-                              userName,
-                              style: const TextStyle(
-                                color: AppColors.textHint,
-                                fontSize: 10,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
                             Icon(Icons.access_time, size: 11, color: AppColors.textHint),
                             const SizedBox(width: 3),
                             Text(
-                              _formatDate(analyzedAt),
+                              _formatTimestamp(analyzedAt),
                               style: const TextStyle(
                                 color: AppColors.textHint,
                                 fontSize: 10,
@@ -744,18 +774,10 @@ class _CommunityAnalysesScreenState extends State<CommunityAnalysesScreen> {
     return [];
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final diff = now.difference(date);
-
-    if (diff.inMinutes < 60) {
-      return 'vor ${diff.inMinutes} Min.';
-    } else if (diff.inHours < 24) {
-      return 'vor ${diff.inHours} Std.';
-    } else if (diff.inDays < 7) {
-      return 'vor ${diff.inDays} ${diff.inDays == 1 ? "Tag" : "Tagen"}';
-    }
-    return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
+  String _formatTimestamp(DateTime date) {
+    final d = '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
+    final t = '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    return '$d $t';
   }
 
   void _startAnalysis(BuildContext context, String symbol, String assetType) {
