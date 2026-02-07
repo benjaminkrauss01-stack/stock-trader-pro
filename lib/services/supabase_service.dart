@@ -240,6 +240,21 @@ class SupabaseService {
         .eq('user_id', userId!);
   }
 
+  // Community Analyses (all users)
+  Future<List<Map<String, dynamic>>> getCommunityAnalyses({int limit = 30}) async {
+    try {
+      final response = await _client.rpc('get_community_analyses', params: {
+        'p_limit': limit,
+      });
+
+      if (response == null) return [];
+      return List<Map<String, dynamic>>.from(response as List);
+    } catch (e) {
+      debugPrint('Error loading community analyses: $e');
+      return [];
+    }
+  }
+
   // ========== ADMIN OPERATIONS ==========
 
   /// Get list of all users (admin only)

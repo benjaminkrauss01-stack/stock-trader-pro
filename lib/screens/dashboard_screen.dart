@@ -10,6 +10,7 @@ import 'crypto_screen.dart';
 import 'etf_screen.dart';
 import 'news_hub_screen.dart';
 import 'analysis_screen.dart';
+import 'community_analyses_screen.dart';
 import '../widgets/app_bar_actions.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -37,8 +38,9 @@ class DashboardScreenState extends State<DashboardScreen> {
         case 1: return const CryptoScreen();
         case 2: return const ETFScreen();
         case 3: return const AnalysisScreen();
-        case 4: return const NewsHubScreen();
-        case 5: return const PortfolioScreen();
+        case 4: return const CommunityAnalysesScreen();
+        case 5: return const NewsHubScreen();
+        case 6: return const PortfolioScreen();
         default: return const _HomeTab();
       }
     });
@@ -108,6 +110,11 @@ class DashboardScreenState extends State<DashboardScreen> {
             icon: Icon(Icons.psychology_outlined),
             selectedIcon: Icon(Icons.psychology),
             label: 'KI-Analyse',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.public_outlined),
+            selectedIcon: Icon(Icons.public),
+            label: 'Analysen',
           ),
           NavigationDestination(
             icon: Icon(Icons.newspaper_outlined),
@@ -250,7 +257,7 @@ class _HomeTab extends StatelessWidget {
             icon: Icons.newspaper,
             label: 'News',
             color: Colors.teal,
-            onTap: () => _navigateToTab(context, 4),
+            onTap: () => _navigateToTab(context, 5),
           ),
         ],
       ),
