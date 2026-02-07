@@ -783,6 +783,6 @@ class _CommunityAnalysesScreenState extends State<CommunityAnalysesScreen> {
   void _startAnalysis(BuildContext context, String symbol, String assetType) {
     context.read<AnalysisProvider>().setSymbolForAnalysis(symbol, assetType);
     final state = context.findAncestorStateOfType<DashboardScreenState>();
-    state?.setTabIndex(3);
+    state?.setTabIndex(2);
   }
 }

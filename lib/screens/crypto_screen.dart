@@ -345,7 +345,7 @@ class _CryptoScreenState extends State<CryptoScreen> {
     context.read<AnalysisProvider>().setSymbolForAnalysis(yfinanceSymbol, 'Crypto');
     // Zum KI-Analyse Tab navigieren (Index 3)
     final state = context.findAncestorStateOfType<DashboardScreenState>();
-    state?.setTabIndex(3);
+    state?.setTabIndex(2);
   }
 }
 

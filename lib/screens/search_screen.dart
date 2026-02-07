@@ -372,6 +372,6 @@ class _SearchScreenState extends State<SearchScreen> {
     // Pop zurück zum Dashboard und zum KI-Analyse Tab wechseln
     Navigator.of(context).pop();
     final state = context.findAncestorStateOfType<DashboardScreenState>();
-    state?.setTabIndex(3);
+    state?.setTabIndex(2);
   }
 }

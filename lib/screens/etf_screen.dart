@@ -212,7 +212,7 @@ class _ETFScreenState extends State<ETFScreen> with SingleTickerProviderStateMix
     context.read<AnalysisProvider>().setSymbolForAnalysis(symbol, 'ETF');
     // Zum KI-Analyse Tab navigieren (Index 3)
     final state = context.findAncestorStateOfType<DashboardScreenState>();
-    state?.setTabIndex(3);
+    state?.setTabIndex(2);
   }
 }
 
