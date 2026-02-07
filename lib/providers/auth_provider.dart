@@ -173,6 +173,38 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> updateDisplayName(String newName) async {
+    try {
+      _error = null;
+      await _supabaseService.updateProfile(displayName: newName);
+      await _loadProfile();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Name konnte nicht aktualisiert werden';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> changePassword(String newPassword) async {
+    try {
+      _error = null;
+      await _supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+      return true;
+    } on AuthException catch (e) {
+      _error = _translateAuthError(e.message);
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Ein unerwarteter Fehler ist aufgetreten';
+      notifyListeners();
+      return false;
+    }
+  }
+
   void clearError() {
     _error = null;
     notifyListeners();

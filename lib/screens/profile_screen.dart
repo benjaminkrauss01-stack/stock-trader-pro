@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/analysis_provider.dart';
+import '../providers/stock_provider.dart';
 import '../utils/constants.dart';
+import '../utils/formatters.dart';
 import 'admin_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -22,8 +29,8 @@ class ProfileScreen extends StatelessWidget {
           ],
         ),
       ),
-      body: Consumer2<AuthProvider, AnalysisProvider>(
-        builder: (context, authProvider, analysisProvider, _) {
+      body: Consumer3<AuthProvider, AnalysisProvider, StockProvider>(
+        builder: (context, authProvider, analysisProvider, stockProvider, _) {
           if (authProvider.isLoading) {
             return const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
@@ -38,30 +45,44 @@ class ProfileScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // User Info Card
-                _buildUserInfoCard(user?.email ?? 'Unbekannt', profile?.displayName),
+                // A. Profile Header
+                _buildProfileHeader(
+                  user?.email ?? 'Unbekannt',
+                  profile?.displayName,
+                  profile?.createdAt,
+                  authProvider,
+                ),
                 const SizedBox(height: 16),
 
-                // Subscription Card
+                // B. Statistics Grid
+                _buildStatisticsGrid(analysisProvider, stockProvider),
+                const SizedBox(height: 16),
+
+                // C. Portfolio Summary
+                if (stockProvider.portfolio.isNotEmpty) ...[
+                  _buildPortfolioSummaryCard(stockProvider),
+                  const SizedBox(height: 16),
+                ],
+
+                // D. Subscription Card
                 _buildSubscriptionCard(context, authProvider),
                 const SizedBox(height: 16),
 
-                // Analysis Usage Card - use AnalysisProvider for real-time updates
+                // E. Analysis Usage Card
                 _buildAnalysisUsageCard(analysisProvider),
                 const SizedBox(height: 16),
 
-                // Settings Card
-                _buildSettingsCard(context),
+                // F. Settings Card
+                _buildSettingsCard(context, authProvider),
                 const SizedBox(height: 24),
 
-                // Logout Button
+                // G. Logout Button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       await authProvider.signOut();
                       if (context.mounted) {
-                        // Clear navigation stack and go to root (AuthWrapper will show LoginScreen)
                         Navigator.of(context).popUntil((route) => route.isFirst);
                       }
                     },
@@ -82,34 +103,102 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildUserInfoCard(String email, String? displayName) {
+  // ──────────────────────────────────────────────
+  // A. Profile Header
+  // ──────────────────────────────────────────────
+
+  String _getInitials(String? displayName, String email) {
+    if (displayName != null && displayName.trim().isNotEmpty) {
+      final parts = displayName.trim().split(' ');
+      if (parts.length >= 2) {
+        return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+      }
+      return parts[0][0].toUpperCase();
+    }
+    return email[0].toUpperCase();
+  }
+
+  Widget _buildProfileHeader(
+    String email,
+    String? displayName,
+    DateTime? createdAt,
+    AuthProvider authProvider,
+  ) {
+    final tier = authProvider.subscriptionTier;
+    final tierColor = _getTierColor(tier);
+    final tierName = _getTierName(tier);
+
     return Card(
       color: AppColors.card,
-      child: Padding(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.primary.withValues(alpha: 0.15),
+              AppColors.card,
+            ],
+          ),
+        ),
         padding: const EdgeInsets.all(20),
         child: Row(
           children: [
+            // Initials Avatar
             Container(
-              width: 64,
-              height: 64,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(32),
+                color: AppColors.primary,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child: const Icon(Icons.person, color: AppColors.primary, size: 32),
+              child: Center(
+                child: Text(
+                  _getInitials(displayName, email),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    displayName ?? 'Stock Trader',
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  // Display Name + Edit
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          displayName ?? 'Stock Trader',
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      InkWell(
+                        onTap: () => _showChangeNameDialog(context, authProvider, displayName),
+                        borderRadius: BorderRadius.circular(12),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(Icons.edit, color: AppColors.textHint, size: 18),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -118,6 +207,40 @@ class ProfileScreen extends StatelessWidget {
                       color: AppColors.textSecondary,
                       fontSize: 14,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Tier Badge + Member Since
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: tierColor.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: tierColor.withValues(alpha: 0.4)),
+                        ),
+                        child: Text(
+                          tierName,
+                          style: TextStyle(
+                            color: tierColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      if (createdAt != null) ...[
+                        const SizedBox(width: 12),
+                        const Icon(Icons.calendar_today, color: AppColors.textHint, size: 13),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Seit ${_formatDate(createdAt)}',
+                          style: const TextStyle(
+                            color: AppColors.textHint,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -128,6 +251,212 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  // ──────────────────────────────────────────────
+  // B. Statistics Grid
+  // ──────────────────────────────────────────────
+
+  Widget _buildStatisticsGrid(AnalysisProvider analysisProvider, StockProvider stockProvider) {
+    final accuracy = analysisProvider.analysisAccuracy;
+    final accuracyPercent = accuracy['percent'] as double;
+    final accuracyTotal = accuracy['total'] as int;
+
+    Color accuracyColor;
+    if (accuracyTotal == 0) {
+      accuracyColor = AppColors.textHint;
+    } else if (accuracyPercent >= 60) {
+      accuracyColor = AppColors.profit;
+    } else if (accuracyPercent >= 40) {
+      accuracyColor = Colors.amber;
+    } else {
+      accuracyColor = AppColors.loss;
+    }
+
+    return Card(
+      color: AppColors.card,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.bar_chart, color: AppColors.primary, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Statistiken',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatTile(
+                    icon: Icons.psychology,
+                    value: '${analysisProvider.savedAnalyses.length}',
+                    label: 'Analysen',
+                    iconColor: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatTile(
+                    icon: Icons.track_changes,
+                    value: accuracyTotal > 0 ? '${accuracyPercent.toStringAsFixed(0)}%' : '--',
+                    label: 'Trefferquote',
+                    iconColor: accuracyColor,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatTile(
+                    icon: Icons.account_balance_wallet,
+                    value: '${stockProvider.portfolio.length}',
+                    label: 'Positionen',
+                    iconColor: AppColors.profit,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatTile(
+                    icon: Icons.visibility,
+                    value: '${stockProvider.watchlistStocks.length}',
+                    label: 'Watchlist',
+                    iconColor: Colors.amber,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatTile({
+    required IconData icon,
+    required String value,
+    required String label,
+    required Color iconColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.cardLight,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: iconColor, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ──────────────────────────────────────────────
+  // C. Portfolio Summary
+  // ──────────────────────────────────────────────
+
+  Widget _buildPortfolioSummaryCard(StockProvider stockProvider) {
+    final profit = stockProvider.portfolioTotalProfit;
+    final profitPercent = stockProvider.portfolioProfitPercent;
+    final isPositive = profit >= 0;
+
+    return Card(
+      color: AppColors.card,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.auto_graph, color: AppColors.primary, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Portfolio-Uebersicht',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildStatRow(
+              'Gesamtwert',
+              Formatters.formatCurrency(stockProvider.portfolioTotalValue),
+              AppColors.textPrimary,
+            ),
+            const SizedBox(height: 10),
+            _buildStatRow(
+              'Gewinn/Verlust',
+              '${isPositive ? '+' : ''}${Formatters.formatCurrency(profit)}',
+              isPositive ? AppColors.profit : AppColors.loss,
+            ),
+            const SizedBox(height: 10),
+            _buildStatRow(
+              'Rendite',
+              '${isPositive ? '+' : ''}${profitPercent.toStringAsFixed(2)}%',
+              isPositive ? AppColors.profit : AppColors.loss,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatRow(String label, String value, Color valueColor) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: valueColor,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ──────────────────────────────────────────────
+  // D. Subscription Card
+  // ──────────────────────────────────────────────
+
   Widget _buildSubscriptionCard(BuildContext context, AuthProvider authProvider) {
     final tier = authProvider.subscriptionTier;
     final isUltimate = tier == 'ultimate';
@@ -135,37 +464,10 @@ class ProfileScreen extends StatelessWidget {
     final isFriends = tier == 'friends';
     final isAdmin = tier == 'admin';
 
-    Color tierColor;
-    IconData tierIcon;
-    String tierName;
-    String tierDescription;
-
-    if (isAdmin) {
-      tierColor = Colors.purple;
-      tierIcon = Icons.admin_panel_settings;
-      tierName = 'Administrator';
-      tierDescription = 'Voller Zugriff + User-Management';
-    } else if (isFriends) {
-      tierColor = Colors.teal;
-      tierIcon = Icons.favorite;
-      tierName = 'Friends';
-      tierDescription = 'Unbegrenzte KI-Analysen';
-    } else if (isUltimate) {
-      tierColor = Colors.amber;
-      tierIcon = Icons.diamond;
-      tierName = 'Ultimate';
-      tierDescription = 'Unbegrenzte KI-Analysen';
-    } else if (isPro) {
-      tierColor = AppColors.primary;
-      tierIcon = Icons.workspace_premium;
-      tierName = 'Pro';
-      tierDescription = '100 KI-Analysen pro Monat';
-    } else {
-      tierColor = AppColors.textSecondary;
-      tierIcon = Icons.account_circle;
-      tierName = 'Free';
-      tierDescription = '5 KI-Analysen pro Monat';
-    }
+    final tierColor = _getTierColor(tier);
+    final tierIcon = _getTierIcon(tier);
+    final tierName = _getTierName(tier);
+    final tierDescription = _getTierDescription(tier);
 
     return Card(
       color: AppColors.card,
@@ -273,6 +575,10 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
   }
+
+  // ──────────────────────────────────────────────
+  // E. Analysis Usage Card
+  // ──────────────────────────────────────────────
 
   Widget _buildAnalysisUsageCard(AnalysisProvider analysisProvider) {
     final remaining = analysisProvider.remainingAnalyses;
@@ -405,36 +711,51 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSettingsCard(BuildContext context) {
+  // ──────────────────────────────────────────────
+  // F. Settings Card
+  // ──────────────────────────────────────────────
+
+  Widget _buildSettingsCard(BuildContext context, AuthProvider authProvider) {
     return Card(
       color: AppColors.card,
       child: Column(
         children: [
           _buildSettingsTile(
-            icon: Icons.notifications_outlined,
-            title: 'Benachrichtigungen',
-            subtitle: 'Push-Benachrichtigungen verwalten',
-            onTap: () {
-              // TODO: Implement notifications settings
-            },
+            icon: Icons.badge_outlined,
+            title: 'Anzeigename aendern',
+            subtitle: authProvider.profile?.displayName ?? 'Nicht festgelegt',
+            onTap: () => _showChangeNameDialog(context, authProvider, authProvider.profile?.displayName),
           ),
           const Divider(color: AppColors.cardLight, height: 1),
           _buildSettingsTile(
-            icon: Icons.security_outlined,
-            title: 'Sicherheit',
-            subtitle: 'Passwort und 2FA',
-            onTap: () {
-              // TODO: Implement security settings
-            },
+            icon: Icons.lock_outlined,
+            title: 'Passwort aendern',
+            subtitle: 'Passwort aktualisieren',
+            onTap: () => _showChangePasswordDialog(context, authProvider),
+          ),
+          const Divider(color: AppColors.cardLight, height: 1),
+          _buildSettingsTile(
+            icon: Icons.notifications_outlined,
+            title: 'Benachrichtigungen',
+            subtitle: 'Push-Benachrichtigungen',
+            onTap: () => _showInfoDialog(
+              context,
+              'Benachrichtigungen',
+              'Push-Benachrichtigungen sind in Entwicklung und bald verfuegbar!',
+              Icons.notifications_active,
+            ),
           ),
           const Divider(color: AppColors.cardLight, height: 1),
           _buildSettingsTile(
             icon: Icons.help_outline,
             title: 'Hilfe & Support',
             subtitle: 'FAQ und Kontakt',
-            onTap: () {
-              // TODO: Implement help screen
-            },
+            onTap: () => _showInfoDialog(
+              context,
+              'Hilfe & Support',
+              'Stock Trader Pro bietet KI-gestuetzte Aktienanalysen, Echtzeit-Kursdaten und virtuelles Portfolio-Management.\n\nBei Fragen oder Problemen kontaktiere uns unter:\nsupport@stocktraderpro.app',
+              Icons.support_agent,
+            ),
           ),
           const Divider(color: AppColors.cardLight, height: 1),
           _buildSettingsTile(
@@ -479,6 +800,229 @@ class ProfileScreen extends StatelessWidget {
       ),
       trailing: const Icon(Icons.chevron_right, color: AppColors.textHint),
       onTap: onTap,
+    );
+  }
+
+  // ──────────────────────────────────────────────
+  // Dialogs
+  // ──────────────────────────────────────────────
+
+  void _showChangeNameDialog(BuildContext context, AuthProvider authProvider, String? currentName) {
+    final controller = TextEditingController(text: currentName ?? '');
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.card,
+          title: const Text(
+            'Anzeigename aendern',
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
+          content: TextField(
+            controller: controller,
+            style: const TextStyle(color: AppColors.textPrimary),
+            decoration: InputDecoration(
+              hintText: 'Dein Name',
+              hintStyle: const TextStyle(color: AppColors.textHint),
+              enabledBorder: OutlineInputBorder(
+                borderSide: const BorderSide(color: AppColors.cardLight),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: const BorderSide(color: AppColors.primary),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              filled: true,
+              fillColor: AppColors.cardLight,
+            ),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Abbrechen', style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      final newName = controller.text.trim();
+                      if (newName.isEmpty) return;
+                      setDialogState(() => isSaving = true);
+                      final success = await authProvider.updateDisplayName(newName);
+                      if (dialogContext.mounted) {
+                        Navigator.of(dialogContext).pop();
+                      }
+                      if (mounted) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          SnackBar(
+                            content: Text(success ? 'Name aktualisiert' : 'Fehler beim Aktualisieren'),
+                            backgroundColor: success ? AppColors.profit : AppColors.loss,
+                          ),
+                        );
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: isSaving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Speichern'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showChangePasswordDialog(BuildContext context, AuthProvider authProvider) {
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    bool isSaving = false;
+    String? errorText;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.card,
+          title: const Text(
+            'Passwort aendern',
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: newPasswordController,
+                obscureText: true,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Neues Passwort',
+                  labelStyle: const TextStyle(color: AppColors.textSecondary),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: const BorderSide(color: AppColors.cardLight),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: const BorderSide(color: AppColors.primary),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  filled: true,
+                  fillColor: AppColors.cardLight,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmPasswordController,
+                obscureText: true,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Passwort bestaetigen',
+                  labelStyle: const TextStyle(color: AppColors.textSecondary),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: const BorderSide(color: AppColors.cardLight),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: const BorderSide(color: AppColors.primary),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  filled: true,
+                  fillColor: AppColors.cardLight,
+                ),
+              ),
+              if (errorText != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  errorText!,
+                  style: const TextStyle(color: AppColors.loss, fontSize: 13),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Abbrechen', style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      final newPw = newPasswordController.text;
+                      final confirmPw = confirmPasswordController.text;
+
+                      if (newPw.length < 6) {
+                        setDialogState(() => errorText = 'Mindestens 6 Zeichen erforderlich');
+                        return;
+                      }
+                      if (newPw != confirmPw) {
+                        setDialogState(() => errorText = 'Passwoerter stimmen nicht ueberein');
+                        return;
+                      }
+
+                      setDialogState(() {
+                        isSaving = true;
+                        errorText = null;
+                      });
+
+                      final success = await authProvider.changePassword(newPw);
+
+                      if (dialogContext.mounted) {
+                        Navigator.of(dialogContext).pop();
+                      }
+                      if (mounted) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          SnackBar(
+                            content: Text(success ? 'Passwort aktualisiert' : (authProvider.error ?? 'Fehler')),
+                            backgroundColor: success ? AppColors.profit : AppColors.loss,
+                          ),
+                        );
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: isSaving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Aendern'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showInfoDialog(BuildContext context, String title, String message, IconData icon) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Row(
+          children: [
+            Icon(icon, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(title, style: const TextStyle(color: AppColors.textPrimary)),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK', style: TextStyle(color: AppColors.primary)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -572,5 +1116,53 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // ──────────────────────────────────────────────
+  // Helpers
+  // ──────────────────────────────────────────────
+
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
+  }
+
+  Color _getTierColor(String tier) {
+    switch (tier) {
+      case 'admin': return Colors.purple;
+      case 'friends': return Colors.teal;
+      case 'ultimate': return Colors.amber;
+      case 'pro': return AppColors.primary;
+      default: return AppColors.textSecondary;
+    }
+  }
+
+  IconData _getTierIcon(String tier) {
+    switch (tier) {
+      case 'admin': return Icons.admin_panel_settings;
+      case 'friends': return Icons.favorite;
+      case 'ultimate': return Icons.diamond;
+      case 'pro': return Icons.workspace_premium;
+      default: return Icons.account_circle;
+    }
+  }
+
+  String _getTierName(String tier) {
+    switch (tier) {
+      case 'admin': return 'Administrator';
+      case 'friends': return 'Friends';
+      case 'ultimate': return 'Ultimate';
+      case 'pro': return 'Pro';
+      default: return 'Free';
+    }
+  }
+
+  String _getTierDescription(String tier) {
+    switch (tier) {
+      case 'admin': return 'Voller Zugriff + User-Management';
+      case 'friends': return 'Unbegrenzte KI-Analysen';
+      case 'ultimate': return 'Unbegrenzte KI-Analysen';
+      case 'pro': return '100 KI-Analysen pro Monat';
+      default: return '5 KI-Analysen pro Monat';
+    }
   }
 }
