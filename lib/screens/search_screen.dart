@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/stock_provider.dart';
+import '../providers/analysis_provider.dart';
 import '../utils/constants.dart';
 import 'stock_detail_screen.dart';
+import 'dashboard_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -208,23 +210,40 @@ class _SearchScreenState extends State<SearchScreen> {
                             ),
                           ],
                         ),
-                        trailing: IconButton(
-                          icon: Icon(
-                            isInWatchlist ? Icons.star : Icons.star_border,
-                            color: isInWatchlist ? Colors.amber : AppColors.textHint,
-                          ),
-                          onPressed: () {
-                            if (isInWatchlist) {
-                              provider.removeFromWatchlist(symbol);
-                            } else {
-                              final assetType = quoteType == 'CRYPTOCURRENCY'
-                                  ? 'Crypto'
-                                  : quoteType == 'ETF'
-                                      ? 'ETF'
-                                      : 'Stock';
-                              provider.addToWatchlist(symbol, assetType: assetType);
-                            }
-                          },
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.psychology, color: AppColors.primary),
+                              tooltip: 'KI-Analyse',
+                              onPressed: () {
+                                final assetType = quoteType == 'CRYPTOCURRENCY'
+                                    ? 'Crypto'
+                                    : quoteType == 'ETF'
+                                        ? 'ETF'
+                                        : 'Stock';
+                                _startAnalysis(context, symbol, assetType);
+                              },
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                isInWatchlist ? Icons.star : Icons.star_border,
+                                color: isInWatchlist ? Colors.amber : AppColors.textHint,
+                              ),
+                              onPressed: () {
+                                if (isInWatchlist) {
+                                  provider.removeFromWatchlist(symbol);
+                                } else {
+                                  final assetType = quoteType == 'CRYPTOCURRENCY'
+                                      ? 'Crypto'
+                                      : quoteType == 'ETF'
+                                          ? 'ETF'
+                                          : 'Stock';
+                                  provider.addToWatchlist(symbol, assetType: assetType);
+                                }
+                              },
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -307,18 +326,28 @@ class _SearchScreenState extends State<SearchScreen> {
                       fontSize: 12,
                     ),
                   ),
-                  trailing: IconButton(
-                    icon: Icon(
-                      isInWatchlist ? Icons.star : Icons.star_border,
-                      color: isInWatchlist ? Colors.amber : AppColors.textHint,
-                    ),
-                    onPressed: () {
-                      if (isInWatchlist) {
-                        provider.removeFromWatchlist(symbol);
-                      } else {
-                        provider.addToWatchlist(symbol);
-                      }
-                    },
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.psychology, color: AppColors.primary),
+                        tooltip: 'KI-Analyse',
+                        onPressed: () => _startAnalysis(context, symbol, 'Stock'),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          isInWatchlist ? Icons.star : Icons.star_border,
+                          color: isInWatchlist ? Colors.amber : AppColors.textHint,
+                        ),
+                        onPressed: () {
+                          if (isInWatchlist) {
+                            provider.removeFromWatchlist(symbol);
+                          } else {
+                            provider.addToWatchlist(symbol);
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -336,5 +365,13 @@ class _SearchScreenState extends State<SearchScreen> {
         builder: (_) => StockDetailScreen(symbol: symbol),
       ),
     );
+  }
+
+  void _startAnalysis(BuildContext context, String symbol, String assetType) {
+    context.read<AnalysisProvider>().setSymbolForAnalysis(symbol, assetType);
+    // Pop zurück zum Dashboard und zum KI-Analyse Tab wechseln
+    Navigator.of(context).pop();
+    final state = context.findAncestorStateOfType<DashboardScreenState>();
+    state?.setTabIndex(3);
   }
 }
